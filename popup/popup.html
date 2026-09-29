@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapHTML</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-card">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-name">SnapHTML</h1>
+          <span class="brand-badge">Multi-Level AI</span>
+        </div>
+      </div>
+      <span class="version-tag">v1.1.0</span>
+    </header>
+
+    <!-- Aktif Sayfa Kartı -->
+    <div class="page-card" id="pageCard">
+      <div class="page-info">
+        <div class="page-domain" id="tabDomain">Yükleniyor...</div>
+        <div class="page-title" id="tabTitle">Aktif sekme taranıyor...</div>
+      </div>
+      <div class="page-metrics">
+        <div class="metric-chip">
+          <span class="metric-label">DOM:</span>
+          <span class="metric-val" id="metricNodes">...</span>
+        </div>
+        <div class="metric-chip">
+          <span class="metric-label">İç Bağlantılar:</span>
+          <span class="metric-val" id="metricLinks">0 link</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DERİNLİK / SEVİYE SEÇİCİ -->
+    <div class="depth-section">
+      <div class="depth-title-row">
+        <span class="depth-label">Klonlama Derinliği</span>
+        <span class="depth-desc" id="depthDescription">Sadece aktif sayfa</span>
+      </div>
+
+      <div class="depth-selector">
+        <button class="depth-btn active" data-depth="0">
+          <span class="d-num">0</span>
+          <span class="d-lbl">Tek Sayfa</span>
+        </button>
+        <button class="depth-btn" data-depth="1">
+          <span class="d-num">1</span>
+          <span class="d-lbl">Sekmeler</span>
+        </button>
+        <button class="depth-btn" data-depth="2">
+          <span class="d-num">2</span>
+          <span class="d-lbl">Tam Site</span>
+        </button>
+      </div>
+
+      <!-- Seviye 1/2 için Bağlantı Önizleme ve Sayfa Limiti -->
+      <div class="depth-details hidden" id="depthDetails">
+        <div class="links-preview-box">
+          <div class="links-preview-header">
+            <span>Keşfedilen Sekmeler / Linkler (<strong id="foundLinksCount">0</strong>)</span>
+            <button class="btn-text" id="btnToggleLinksList">Listeyi Gör</button>
+          </div>
+          <div class="links-list hidden" id="linksList"></div>
+        </div>
+
+        <div class="limit-row">
+          <span>Maksimum Sayfa Sınırı:</span>
+          <select id="maxPagesSelect" class="select-sm">
+            <option value="10">10 Sayfa</option>
+            <option value="25" selected>25 Sayfa</option>
+            <option value="50">50 Sayfa</option>
+            <option value="100">100 Sayfa</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- İlerleme Durumu -->
+    <div class="progress-wrap hidden" id="progressWrap">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-status" id="progressText">Hazırlanıyor...</div>
+    </div>
+
+    <!-- Ana Aksiyon Butonları -->
+    <div class="actions">
+      <!-- Seviye 0 Butonu: Tek Sayfa İndir -->
+      <button class="btn btn-primary" id="btnDownload">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span id="btnDownloadText">Sayfayı Klonla & İndir (.html)</span>
+      </button>
+
+      <!-- Seviye 1 & 2 Butonu: Çok Sayfalı ZIP Paketi -->
+      <button class="btn btn-emerald hidden" id="btnCrawlDownload">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+        <span id="btnCrawlText">Tüm Seviyeleri Klonla & Paketle (.zip)</span>
+      </button>
+
+      <!-- Önizleme Sekmesi -->
+      <button class="btn btn-secondary" id="btnPreview">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        <span>Önizleme & Test Sekmesinde Aç</span>
+      </button>
+
+      <!-- AI İçin Panoya Kopyala -->
+      <button class="btn btn-tertiary" id="btnCopyAi">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>AI İçin Röntgen & Prompt Kopyala</span>
+      </button>
+    </div>
+
+    <!-- Ayarlar / Seçenekler Accordion -->
+    <div class="options-box">
+      <div class="options-header" id="optionsToggle">
+        <span>Gelişmiş Klonlama Ayarları</span>
+        <svg class="chevron-icon" id="chevronIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+
+      <div class="options-content" id="optionsContent">
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>Görselleri Göm (Base64)</strong>
+            <small>Resimleri çevrimdışı çalışacak şekilde dosyaya mühürler</small>
+          </span>
+          <input type="checkbox" id="optImages" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>Yazı Tiplerini Göm (@font-face)</strong>
+            <small>Özel font dosyalarını (woff2/ttf) HTML'e gömer</small>
+          </span>
+          <input type="checkbox" id="optFonts" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>Betikleri Dondur (Freeze)</strong>
+            <small>API hatalarını ve login yönlendirmelerini engeller</small>
+          </span>
+          <input type="checkbox" id="optFreeze" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>Canvas & Grafikleri Koru</strong>
+            <small>Chart.js, sayaç ve çizimleri yüksek kaliteli PNG yapar</small>
+          </span>
+          <input type="checkbox" id="optCanvas" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>AI Metadata & Röntgen Bloğu</strong>
+            <small>Claude, ChatGPT ve Cursor için özet başlık ekler</small>
+          </span>
+          <input type="checkbox" id="optAi" checked>
+          <span class="toggle-switch"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span>Tek tıkla %100 bağımsız canlı web ve site paketi</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

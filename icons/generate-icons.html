@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>SnapHTML İkon Üretici</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #fff; padding: 40px; text-align: center; }
+    canvas { margin: 10px; border: 1px solid #334155; border-radius: 8px; }
+    button { padding: 12px 24px; font-size: 16px; background: #0284c7; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 20px; }
+    button:hover { background: #0369a1; }
+  </style>
+</head>
+<body>
+  <h1>SnapHTML İkonları</h1>
+  <p>Bu sayfayı Chrome'da açarak SnapHTML için özel tasarlanmış PNG ikonlarını indirebilirsiniz.</p>
+  <div id="canvases"></div>
+  <button onclick="downloadAll()">Tüm İkonları İndir (16, 32, 48, 128)</button>
+
+  <script>
+    const sizes = [16, 32, 48, 128];
+    const container = document.getElementById('canvases');
+
+    sizes.forEach(size => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.id = 'icon' + size;
+      container.appendChild(canvas);
+
+      const ctx = canvas.getContext('2d');
+      
+      // Arka plan gradient
+      const grad = ctx.createLinearGradient(0, 0, size, size);
+      grad.addColorStop(0, '#06b6d4');
+      grad.addColorStop(1, '#0284c7');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, size * 0.2);
+      ctx.fill();
+
+      // HTML Parantezleri </>
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, size * 0.08);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Sol <
+      ctx.beginPath();
+      ctx.moveTo(size * 0.38, size * 0.32);
+      ctx.lineTo(size * 0.22, size * 0.5);
+      ctx.lineTo(size * 0.38, size * 0.68);
+      ctx.stroke();
+
+      // Sağ >
+      ctx.beginPath();
+      ctx.moveTo(size * 0.62, size * 0.32);
+      ctx.lineTo(size * 0.78, size * 0.5);
+      ctx.lineTo(size * 0.62, size * 0.68);
+      ctx.stroke();
+
+      // Orta Slash /
+      ctx.beginPath();
+      ctx.moveTo(size * 0.56, size * 0.28);
+      ctx.lineTo(size * 0.44, size * 0.72);
+      ctx.stroke();
+    });
+
+    function downloadAll() {
+      sizes.forEach(size => {
+        const canvas = document.getElementById('icon' + size);
+        const link = document.createElement('a');
+        link.download = `icon${size}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+  </script>
+</body>
+</html>

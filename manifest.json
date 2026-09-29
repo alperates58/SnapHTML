@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "SnapHTML — Single-File Web Cloner & AI Mirror",
+  "version": "1.0.0",
+  "description": "Herhangi bir web sayfasını tüm CSS, görseller, fontlar, anlık DOM durumu ve yapısıyla tek tıkla bağımsız bir HTML (.html) dosyası olarak klonlar ve AI için hazır hale getirir.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "SnapHTML — Sayfayı Klonla"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "unlimitedStorage",
+    "downloads",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "preview/*",
+        "lib/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}
