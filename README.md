@@ -68,6 +68,11 @@ SnapHTML/
 ├── manifest.json              # Chrome Manifest V3 yapılandırması & universal host permissions
 ├── background.js              # Recursive Crawl Engine, Universal CORS bypass, Link Rewriter & ZIP Manager
 ├── content-script.js          # DOM serialization, Canvas-to-PNG, Declarative Shadow DOM, Link Discovery
+├── icons/                     # 16, 32, 48, 128 PNG ikonları
+│   ├── icon16.png
+│   ├── icon32.png
+│   ├── icon48.png
+│   └── icon128.png
 ├── lib/
 │   ├── storage.js             # IndexedDB motoru: Büyük boyutlu snapshot'lar için kotasız depolama
 │   └── zip.js                 # Sıfır bağımlılıklı pure-JS ZIP arşivleme kütüphanesi
@@ -79,5 +84,9 @@ SnapHTML/
 │   ├── preview.html           # Çoklu cihaz (Desktop/Tablet/Mobile) önizleme çalışma alanı
 │   ├── preview.css            # Workspace stilleri
 │   └── preview.js             # Canlı iframe render & AI prompt motoru
+├── store-assets/              # Chrome Web Store için 1280x800 ekran görüntüleri ve tanıtım banner'ları
+├── STORE_LISTING.md           # Mağaza başlıkları, açıklamaları ve izin gerekçeleri kılavuzu
+├── PRIVACY_POLICY.md          # Google CWS uyumlu resmi Gizlilik Politikası
+├── SnapHTML_v1.0.0_ChromeWebStore.zip # Mağazaya doğrudan yüklenecek temiz üretim paketi
 └── README.md                  # Proje dokümantasyonu
 ```

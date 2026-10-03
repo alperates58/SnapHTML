@@ -424,6 +424,12 @@ VIEWPORT    : ${viewport}
     };
   }
 
+  const DANGEROUS_LINK_PATTERNS = [
+    /\/logout/i, /\/log-out/i, /\/cikis/i, /\/signout/i, /\/sign-out/i,
+    /\/auth\/logout/i, /\/delete/i, /\/sil/i, /\/disconnect/i, /\/unsubscribe/i,
+    /\/account\/delete/i, /\/session\/destroy/i
+  ];
+
   /**
    * DERİNLİK MOTORU: Sayfadaki aynı domaine ait iç bağlantıları (Sekmeler, Menü linkleri vb.) keşfeder
    */
@@ -445,6 +451,9 @@ VIEWPORT    : ${viewport}
 
         if (parsed.origin !== currentOrigin) return;
         if (/\.(pdf|zip|rar|tar|gz|mp4|mp3|exe|apk|dmg|iso)$/i.test(parsed.pathname)) return;
+
+        // Güvenlik: Oturumu kapatacak veya veri silecek rotaları atla
+        if (DANGEROUS_LINK_PATTERNS.some(re => re.test(parsed.pathname))) return;
 
         if (!seenUrls.has(absUrl)) {
           seenUrls.add(absUrl);
@@ -470,6 +479,8 @@ VIEWPORT    : ${viewport}
         const parsed = new URL(absUrl);
 
         if (parsed.origin === currentOrigin && !seenUrls.has(absUrl)) {
+          if (DANGEROUS_LINK_PATTERNS.some(re => re.test(parsed.pathname))) return;
+
           seenUrls.add(absUrl);
           const label = (el.innerText || el.getAttribute('title') || el.getAttribute('aria-label') || 'Sekme')
             .replace(/\s+/g, ' ')
@@ -487,6 +498,45 @@ VIEWPORT    : ${viewport}
   }
 
   /**
+   * Sayfayı hızlıca kaydırarak lazy-load (gecikmeli) görselleri ve bileşenleri uyandırır
+   */
+  async function triggerLazyLoadPass(onProgress) {
+    if (onProgress) onProgress('Görseller uyandırılıyor (Lazy-load pass)...');
+    const originalScrollY = window.scrollY;
+    const bodyHeight = Math.max(document.body.scrollHeight || 0, document.documentElement.scrollHeight || 0);
+    const viewportHeight = window.innerHeight || 800;
+    const maxScroll = Math.min(bodyHeight, viewportHeight * 5);
+    const step = Math.max(400, Math.floor(viewportHeight * 0.8));
+
+    for (let pos = 0; pos < maxScroll; pos += step) {
+      window.scrollTo(0, pos);
+      await new Promise(r => setTimeout(r, 35));
+    }
+    window.scrollTo(0, originalScrollY);
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  /**
+   * AI Asistanları (Claude/Cursor) için HTML'i budar; ağır Base64 görsel ve fontları hafifletir.
+   */
+  function pruneHtmlForAi(root) {
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      if (src.startsWith('data:')) {
+        const alt = img.getAttribute('alt') || 'Görsel';
+        img.setAttribute('src', `[Görsel: ${alt.slice(0, 30)}]`);
+      }
+    });
+    clone.querySelectorAll('style').forEach(st => {
+      if (st.textContent) {
+        st.textContent = st.textContent.replace(/url\(["']?data:font\/[^;]+;base64,[^"')]+["']?\)/gi, 'local("sans-serif")');
+      }
+    });
+    return clone;
+  }
+
+  /**
    * Klonlama Ana Akışı
    */
   async function clonePage(options = {}, onProgress = null) {
@@ -496,8 +546,14 @@ VIEWPORT    : ${viewport}
       freezeScripts: options.freezeScripts !== false,
       preserveCanvas: options.preserveCanvas !== false,
       addAiHeader: options.addAiHeader !== false,
-      inlineStyles: options.inlineStyles !== false
+      inlineStyles: options.inlineStyles !== false,
+      dietMode: options.dietMode === true,
+      triggerScroll: options.triggerScroll !== false && !options.isCrawlPage
     };
+
+    if (opts.triggerScroll) {
+      await triggerLazyLoadPass(onProgress);
+    }
 
     if (onProgress) onProgress('Sayfa form durumları mühürleniyor...');
     sealInteractiveStates(document);
@@ -513,7 +569,7 @@ VIEWPORT    : ${viewport}
     if (opts.inlineStyles) {
       let allCss = await harvestAllCss(onProgress);
 
-      if (opts.inlineFonts) {
+      if (opts.inlineFonts && !opts.dietMode) {
         allCss = await inlineWebFonts(allCss, onProgress);
       }
 
@@ -526,7 +582,7 @@ VIEWPORT    : ${viewport}
       head.appendChild(masterStyle);
     }
 
-    if (opts.inlineImages) {
+    if (opts.inlineImages && !opts.dietMode) {
       await inlineAllImages(cloneDoc, onProgress);
     }
 
@@ -541,7 +597,11 @@ VIEWPORT    : ${viewport}
       cloneDoc.insertBefore(headEl, cloneDoc.firstChild);
     }
 
-    if (!headEl.querySelector('base')) {
+    // Çok sayfalı ZIP arşivinde remote base tag yerel href="./sayfa.html" linklerini bozar
+    if (options.isCrawlPage) {
+      const existingBase = headEl.querySelector('base');
+      if (existingBase) existingBase.remove();
+    } else if (!headEl.querySelector('base')) {
       const baseTag = document.createElement('base');
       baseTag.href = document.baseURI || window.location.href;
       headEl.insertBefore(baseTag, headEl.firstChild);
@@ -556,12 +616,16 @@ VIEWPORT    : ${viewport}
       headEl.appendChild(aiScript);
     }
 
-    const finalHtml = '<!DOCTYPE html>\n' + (opts.addAiHeader ? aiContext.comment + '\n' : '') + cloneDoc.outerHTML;
+    const prunedDoc = pruneHtmlForAi(cloneDoc);
+    const aiHtml = '<!DOCTYPE html>\n' + (opts.addAiHeader ? aiContext.comment + '\n' : '') + prunedDoc.outerHTML;
+
+    const finalHtml = opts.dietMode ? aiHtml : ('<!DOCTYPE html>\n' + (opts.addAiHeader ? aiContext.comment + '\n' : '') + cloneDoc.outerHTML);
 
     if (onProgress) onProgress('Tamamlandı!');
 
     return {
       html: finalHtml,
+      aiHtml: aiHtml,
       metadata: aiContext.data,
       title: document.title || 'snapshot',
       url: window.location.href,

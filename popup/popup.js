@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const optFonts = document.getElementById('optFonts');
   const optFreeze = document.getElementById('optFreeze');
   const optCanvas = document.getElementById('optCanvas');
+  const optScroll = document.getElementById('optScroll');
   const optAi = document.getElementById('optAi');
 
   let currentTab = null;
@@ -49,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof o.inlineFonts === 'boolean') optFonts.checked = o.inlineFonts;
       if (typeof o.freezeScripts === 'boolean') optFreeze.checked = o.freezeScripts;
       if (typeof o.preserveCanvas === 'boolean') optCanvas.checked = o.preserveCanvas;
+      if (typeof o.triggerScroll === 'boolean') optScroll.checked = o.triggerScroll;
       if (typeof o.addAiHeader === 'boolean') optAi.checked = o.addAiHeader;
     }
     if (result && typeof result.snaphtml_depth === 'number') {
@@ -62,13 +64,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       inlineFonts: optFonts.checked,
       freezeScripts: optFreeze.checked,
       preserveCanvas: optCanvas.checked,
-      addAiHeader: optAi.checked
+      triggerScroll: optScroll ? optScroll.checked : true,
+      addAiHeader: optAi ? optAi.checked : true
     };
     chrome.storage.local.set({ snaphtml_options: options });
     return options;
   }
 
-  [optImages, optFonts, optFreeze, optCanvas, optAi].forEach(el => {
+  [optImages, optFonts, optFreeze, optCanvas, optScroll, optAi].filter(Boolean).forEach(el => {
     el.addEventListener('change', saveCurrentOptions);
   });
 
@@ -258,6 +261,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (dlRes && dlRes.success) {
         progressText.textContent = '✓ Başarıyla İndirildi!';
         setTimeout(() => window.close(), 1200);
+      } else {
+        throw new Error(dlRes?.error || 'İndirme başlatılamadı.');
       }
     } catch (err) {
       alert('Hata: ' + err.message);
@@ -370,7 +375,7 @@ Ekran / Viewport: ${meta.viewport || 'N/A'}
 
 ## 💻 Canlı HTML Klonu:
 \`\`\`html
-${response.html}
+${response.aiHtml || response.html}
 \`\`\`
 `;
 

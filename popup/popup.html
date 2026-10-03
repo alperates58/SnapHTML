@@ -22,7 +22,7 @@
           <span class="brand-badge">Multi-Level AI</span>
         </div>
       </div>
-      <span class="version-tag">v1.1.0</span>
+      <span class="version-tag">v1.0.0</span>
     </header>
 
     <!-- Aktif Sayfa Kartı -->
@@ -126,7 +126,7 @@
         <span>Önizleme & Test Sekmesinde Aç</span>
       </button>
 
-      <!-- AI İçin Panoya Kopyala -->
+      <!-- AI İçin Röntgen & Prompt Kopyala -->
       <button class="btn btn-tertiary" id="btnCopyAi">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -179,6 +179,15 @@
             <small>Chart.js, sayaç ve çizimleri yüksek kaliteli PNG yapar</small>
           </span>
           <input type="checkbox" id="optCanvas" checked>
+          <span class="toggle-switch"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>Görselleri Uyandır (Auto-Scroll)</strong>
+            <small>Lazy-load resimlerin tamamını klonlama öncesi yakalar</small>
+          </span>
+          <input type="checkbox" id="optScroll" checked>
           <span class="toggle-switch"></span>
         </label>
 

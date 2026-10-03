@@ -175,16 +175,19 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
 
     let cloneResult = null;
 
+    const crawlOptions = { ...options, isCrawlPage: true };
+
     if (item.isInitialTab) {
       // Aktif sekmeden al
       cloneResult = await chrome.tabs.sendMessage(startTabId, {
         action: 'cloneCurrentPage',
-        options
+        options: crawlOptions
       });
     } else {
       // Arka plan sekmesinde aç, bekle ve klonla
+      let bgTab = null;
       try {
-        const bgTab = await chrome.tabs.create({ url: normUrl, active: false });
+        bgTab = await chrome.tabs.create({ url: normUrl, active: false });
         await waitForTabReady(bgTab.id);
         
         // SPA hydration için bekleme
@@ -197,13 +200,17 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
 
         cloneResult = await chrome.tabs.sendMessage(bgTab.id, {
           action: 'cloneCurrentPage',
-          options
+          options: crawlOptions
         });
-
-        await chrome.tabs.remove(bgTab.id);
       } catch (err) {
         console.warn('[SnapHTML Crawler] Alt sayfa atlandı:', normUrl, err);
         continue;
+      } finally {
+        if (bgTab && bgTab.id) {
+          try {
+            await chrome.tabs.remove(bgTab.id);
+          } catch {}
+        }
       }
     }
 

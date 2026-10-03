@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 - ${stats.mainContainers || 0} Ana Konteyner
 - ${stats.forms || 0} Form (${stats.inputs || 0} input/select)
 - ${stats.buttons || 0} Etkileşimli Buton
-- Kullanılan Kütüphaneler: ${meta.frameworks?.join(', ') || 'Standart'}
+- Kullanılan Kütüphaneler: ${meta.frameworks?.join(', ') || 'Standart Web'}
 
 ## 🎨 Stil & Renkler:
 - Sayfa Arka Planı: ${bg}
