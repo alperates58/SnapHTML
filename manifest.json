@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SnapHTML — Web Cloner & AI Mirror",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Web sayfalarını stilleri, fontları ve DOM durumuyla klonlar; tek tıkla bağımsız HTML veya AI için hazır ZIP paketi yapar.",
   "icons": {
     "16": "icons/icon16.png",

@@ -87,6 +87,6 @@ SnapHTML/
 ├── store-assets/              # Chrome Web Store için 1280x800 ekran görüntüleri ve tanıtım banner'ları
 ├── STORE_LISTING.md           # Mağaza başlıkları, açıklamaları ve izin gerekçeleri kılavuzu
 ├── PRIVACY_POLICY.md          # Google CWS uyumlu resmi Gizlilik Politikası
-├── SnapHTML_v1.0.0_ChromeWebStore.zip # Mağazaya doğrudan yüklenecek temiz üretim paketi
+├── SnapHTML_v1.0.1_ChromeWebStore.zip # Mağazaya doğrudan yüklenecek temiz üretim paketi
 └── README.md                  # Proje dokümantasyonu
 ```

@@ -3,7 +3,9 @@ const path = require('path');
 const zlib = require('zlib');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const OUTPUT_ZIP = path.join(ROOT_DIR, 'SnapHTML_v1.0.0_ChromeWebStore.zip');
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'manifest.json'), 'utf8'));
+const version = manifest.version || '1.0.1';
+const OUTPUT_ZIP = path.join(ROOT_DIR, `SnapHTML_v${version}_ChromeWebStore.zip`);
 
 // Pakete dahil edilecek dosyalar ve klasörler
 const INCLUDED_FILES = [

@@ -11,7 +11,7 @@ Bu doküman, **SnapHTML** eklentisini **Google Chrome Web Store Developer Dashbo
 | **Eklenti Adı (Extension Name)** | `SnapHTML — Web Cloner & AI Mirror` | Max 45 karakter (34 karakter ✅) |
 | **Kısa Açıklama (TR)** | `Web sayfalarını stilleri, fontları ve DOM durumuyla klonlar; tek tıkla bağımsız HTML veya AI için hazır ZIP paketi yapar.` | Max 132 karakter (120 karakter ✅) |
 | **Short Description (EN)** | `Clone any web page with styles, fonts, images, and DOM state into standalone offline HTML or multi-page ZIP ready for AI.` | Max 132 karakter (122 karakter ✅) |
-| **Sürüm (Version)** | `1.0.0` | Manifest V3 |
+| **Sürüm (Version)** | `1.0.1` | Manifest V3 |
 | **Kategori (Category)** | `Geliştirici Araçları (Developer Tools)` veya `Verimlilik (Productivity)` | Birincil: Developer Tools |
 | **Fiyatlandırma** | `Ücretsiz (Free)` | — |
 | **Dil Desteği** | Türkçe & İngilizce | — |
@@ -164,7 +164,7 @@ Aşağıdaki dosyalar `store-assets/` ve `icons/` dizininde tam mağaza standart
    - [https://chrome.google.com/webstore/devconsole](https://chrome.google.com/webstore/devconsole) adresine gidin.
    - (İlk defa yüklüyorsanız bir defalık 5$ Google geliştirici kayıt ücreti ödenir).
 2. **"Yeni Öğe Ekle" (Add new item) Butonuna Tıklayın:**
-   - Projenin kök dizininde oluşturulan **`SnapHTML_v1.0.0_ChromeWebStore.zip`** dosyasını sürükleyip bırakın.
+   - Projenin kök dizininde oluşturulan **`SnapHTML_v1.0.1_ChromeWebStore.zip`** dosyasını sürükleyip bırakın.
 3. **Mağaza Bilgilerini Doldurun:**
    - Yukarıdaki **Başlık**, **Kısa Açıklama** ve **Detaylı Açıklama** metinlerini yapıştırın.
 4. **Görselleri Yükleyin:**
