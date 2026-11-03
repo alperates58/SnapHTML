@@ -1,9 +1,9 @@
 /**
- * SnapHTML - Content Script (DOM & Asset Cloner Engine V2)
+ * SnapHTML - Content Script (DOM & Asset Cloner Engine V2.1)
  * Web sayfalarını CSS, fontlar, görseller, anlık form/DOM durumu ve
  * AI metadata'sı ile eksiksiz, tek parça bağımsız HTML olarak klonlar.
- * Gerçek Mobil/Masaüstü Viewport desteği, Akıllı SPA State Keşif Motoru (React, Vue, Angular)
- * ve Güvenli Navigasyon (Safe Crawling) yetenekleri içerir.
+ * Gerçek Mobil/Masaüstü Viewport desteği, Akıllı SPA State Keşif Motoru (React, Vue, Angular),
+ * Safe Modal Detection & Recovery ve Dual-Viewport Capture Accuracy yetenekleri içerir.
  */
 
 (() => {
@@ -456,7 +456,7 @@ VIEWPORT    : ${viewport}
   }
 
   // ============================================================================
-  // SPA STATE DISCOVERY & SAFE CRAWLING ENGINE
+  // SPA STATE DISCOVERY, CANONICAL SCREEN IDENTITY & SAFE MODAL RECOVERY
   // ============================================================================
 
   // Yıkıcı / Tehlikeli Eylemler (Kesinlikle Tıklanmayacak İşlemler)
@@ -471,28 +471,207 @@ VIEWPORT    : ${viewport}
     /\/account\/delete/i, /\/session\/destroy/i
   ];
 
-  /**
-   * Mantıksal Ekran ID'si üretir (Örn: screen_chat, screen_editor, screen_git...)
-   */
-  function generateLogicalScreenId(rawTitle, fallbackIndex = 0) {
-    const text = (rawTitle || '').toLowerCase().trim();
-    if (/sohbet|chat/.test(text)) return 'screen_chat';
-    if (/kod|code|editör|editor/.test(text)) return 'screen_editor';
-    if (/\bgit\b/.test(text)) return 'screen_git';
-    if (/ajan|agent/.test(text)) return 'screen_agents';
-    if (/veritaban|database|\bdb\b/.test(text)) return 'screen_database';
-    if (/dağıtım|deploy/.test(text)) return 'screen_deployments';
-    if (/ayar|setting/.test(text)) return 'screen_settings';
-    if (/dashboard|panel|genel bakış|overview/.test(text)) return 'screen_dashboard';
-    if (/proje|project/.test(text)) return 'screen_projects';
-    if (/profil|profile/.test(text)) return 'screen_profile';
-    if (/log/.test(text)) return 'screen_logs';
-    if (/metrik|metric/.test(text)) return 'screen_metrics';
+  // Kanonik Ekran Tanımları (Desktop & Mobile Eşleşme Tutarlılığı İçin)
+  const CANONICAL_SCREEN_DEFINITIONS = [
+    { id: 'screen_chat', title: 'Sohbet', regex: /\b(sohbet|chat|mesaj|konuşma|assistant|asistan)\b/i },
+    { id: 'screen_editor', title: 'Kod Editörü', regex: /\b(kod|code|editör|editor|dosya|files|explorer)\b/i },
+    { id: 'screen_git', title: 'Git', regex: /\b(git|branch|commit|pull|repository|depo)\b/i },
+    { id: 'screen_agents', title: 'Ajanlar', regex: /\b(ajan|agent|ajanlar|agents)\b/i },
+    { id: 'screen_database', title: 'Veritabanı', regex: /\b(veritaban|database|\bdb\b|sql|tables|tablolar)\b/i },
+    { id: 'screen_deployments', title: 'Dağıtımlar', regex: /\b(dağıtım|dağıtımlar|deploy|deployment|deployments|yayın)\b/i },
+    { id: 'screen_settings', title: 'Ayarlar', regex: /\b(ayar|ayarlar|settings|setting|tercih|preferences|config)\b/i },
+    { id: 'screen_dashboard', title: 'Genel Bakış', regex: /\b(dashboard|panel|genel bakış|overview|ana sayfa|home)\b/i },
+    { id: 'screen_projects', title: 'Projeler', regex: /\b(proje|projeler|projects|project|çalışma alanı|workspaces)\b/i },
+    { id: 'screen_logs', title: 'Loglar', regex: /\b(log|logs|günlük|günlükler)\b/i },
+    { id: 'screen_metrics', title: 'Metrikler', regex: /\b(metrik|metrics|performans|monitoring)\b/i }
+  ];
 
-    // Genel slug üretici
-    let slug = text.replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    if (!slug) slug = `screen_${fallbackIndex}`;
-    return `screen_${slug.slice(0, 24)}`;
+  /**
+   * Ekran Etiketinden Kanonik Ekran Kimliğini Belirler
+   */
+  function resolveCanonicalScreen(rawLabel, href = '', headings = '') {
+    const combined = `${rawLabel} ${href} ${headings}`.toLowerCase().trim();
+
+    for (const def of CANONICAL_SCREEN_DEFINITIONS) {
+      if (def.regex.test(combined)) {
+        return {
+          id: def.id,
+          title: def.title,
+          isCanonical: true
+        };
+      }
+    }
+
+    if (/proje oluştur|içe aktar|create.*project/i.test(combined)) {
+      return {
+        id: 'screen_modal_create_project',
+        title: 'Çalışma Alanı Projesi Oluştur veya İçe Aktar',
+        isCanonical: true
+      };
+    }
+
+    let slug = rawLabel.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    if (!slug) slug = 'screen_custom';
+    return {
+      id: `screen_${slug.slice(0, 24)}`,
+      title: rawLabel || 'Ekran',
+      isCanonical: false
+    };
+  }
+
+  // ============================================================================
+  // SAFE MODAL DETECTION & RECOVERY ENGINE
+  // ============================================================================
+
+  /**
+   * Sayfada Açık ve Görünür Modal/Dialog/Drawer/Overlay Var mı İnceler
+   */
+  function detectActiveModal() {
+    const candidates = Array.from(document.querySelectorAll(
+      '[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"], [data-radix-dialog-content][data-state="open"], [data-headlessui-state="open"][role="dialog"]'
+    ));
+
+    document.querySelectorAll('.fixed.inset-0, [class*="backdrop" i], [class*="overlay" i]').forEach(ov => {
+      const rect = ov.getBoundingClientRect();
+      if (rect.width > 120 && rect.height > 120 && window.getComputedStyle(ov).display !== 'none') {
+        const dialogBox = ov.querySelector('[role="dialog"], [class*="dialog" i], [class*="modal" i], [class*="content" i], [class*="card" i]');
+        if (dialogBox && !candidates.includes(dialogBox)) {
+          candidates.push(dialogBox);
+        }
+      }
+    });
+
+    for (const el of candidates) {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      const isVisible = rect.width > 50 && rect.height > 50 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+      if (!isVisible) continue;
+
+      const headingEl = el.querySelector('h1, h2, h3, h4, [class*="title" i], [id*="title" i]');
+      const rawTitle = (headingEl?.innerText || el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || '').trim();
+      const bodyText = (el.innerText || '').slice(0, 400);
+
+      const title = rawTitle || (bodyText.slice(0, 80).split('\n')[0]) || 'Açık Modal Pencere';
+      const isDevHubProjectModal = /çalışma alanı|proje oluştur|içe aktar|create.*project|import.*project/i.test(`${title} ${bodyText}`);
+
+      // Güvenli Kapatma / İptal / X Butonunu Bul
+      const closeButtons = Array.from(el.querySelectorAll('button, [role="button"], [data-radix-dialog-close], [data-dismiss="modal"]'));
+      let safeCloseButton = null;
+
+      for (const btn of closeButtons) {
+        const btnText = (btn.innerText || btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase().trim();
+        const btnType = (btn.getAttribute('type') || '').toLowerCase();
+
+        // Kesinlikle form gönderim veya onay butonu olmamalı!
+        if (/\b(oluştur|create|kaydet|save|submit|sil|delete|deploy|onayla|confirm|gönder)\b/i.test(btnText) || btnType === 'submit') {
+          continue;
+        }
+
+        if (
+          /\b(kapat|iptal|vazgeç|close|cancel|dismiss)\b/i.test(btnText) ||
+          btn.hasAttribute('data-radix-dialog-close') ||
+          btn.querySelector('svg[class*="x" i], svg[class*="close" i], svg.lucide-x')
+        ) {
+          safeCloseButton = btn;
+          break;
+        }
+      }
+
+      const backdrop = el.closest('.fixed.inset-0, [class*="overlay" i], [class*="backdrop" i]') ||
+        document.querySelector('[data-radix-dialog-overlay][data-state="open"], .fixed.inset-0.bg-black');
+
+      const hasInputs = el.querySelectorAll('input:not([type="hidden"]), textarea, select').length > 0;
+
+      return {
+        isOpen: true,
+        title,
+        isDevHubProjectModal,
+        hasInputs,
+        element: el,
+        safeCloseButton,
+        backdrop
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Modalı Güvenli Sırayla Kapatır ve DOM Üzerinden Doğrular
+   */
+  async function dismissActiveModal() {
+    const modal = detectActiveModal();
+    if (!modal) {
+      return { success: true, alreadyClosed: true };
+    }
+
+    // 1. Adım: Belirgin ve Güvenli Kapat / İptal / X Butonu
+    if (modal.safeCloseButton) {
+      try {
+        modal.safeCloseButton.scrollIntoView({ behavior: 'instant', block: 'center' });
+        modal.safeCloseButton.click();
+      } catch {}
+    }
+
+    // 2. Adım: Escape Tuşu Olayı
+    const escDown = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });
+    const escUp = new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });
+    document.activeElement?.dispatchEvent(escDown);
+    document.activeElement?.dispatchEvent(escUp);
+    document.dispatchEvent(escDown);
+    document.dispatchEvent(escUp);
+
+    await new Promise(r => setTimeout(r, 350));
+
+    // 3. Adım: Güvenli Backdrop Tıklaması
+    let recheck = detectActiveModal();
+    if (recheck && recheck.backdrop && recheck.backdrop !== recheck.element) {
+      try {
+        recheck.backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        await new Promise(r => setTimeout(r, 350));
+      } catch {}
+    }
+
+    // Gerçek DOM Doğrulaması
+    const finalCheck = detectActiveModal();
+    if (!finalCheck) {
+      return { success: true, verified: true };
+    }
+
+    return {
+      success: false,
+      reason: 'BLOCKED_BY_MODAL',
+      title: finalCheck.title,
+      isDevHubProjectModal: finalCheck.isDevHubProjectModal
+    };
+  }
+
+  /**
+   * Ekran Yakalamadan Önce Arayüzü Temizler (Transient Drawer, Popover ve Modal Temizliği)
+   */
+  async function ensureCleanNavigationState() {
+    const modalDismiss = await dismissActiveModal();
+
+    // Açık mobil drawer / hamburger menü overlay'i varsa kapat
+    const openMobileMenu = document.querySelector('[class*="mobile-menu" i][data-state="open"], [class*="drawer" i][data-state="open"], nav[class*="open" i]');
+    if (openMobileMenu) {
+      const closeBtn = openMobileMenu.querySelector('button[aria-label*="kapat" i], button[aria-label*="close" i], button:has(svg.lucide-x)');
+      if (closeBtn) {
+        try { closeBtn.click(); } catch {}
+      } else {
+        const hamburger = document.querySelector('button[aria-label*="menu" i], button[aria-label*="menü" i], [class*="hamburger" i]');
+        if (hamburger) {
+          try { hamburger.click(); } catch {}
+        }
+      }
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    return {
+      clean: modalDismiss.success,
+      modalBlocked: !modalDismiss.success,
+      modalDetails: modalDismiss.reason ? modalDismiss : null
+    };
   }
 
   /**
@@ -543,8 +722,9 @@ VIEWPORT    : ${viewport}
   function computeDomFingerprint() {
     const mainEl = document.querySelector('main, [role="main"]') || document.body;
     
-    // 1. Başlıklar
+    // 1. Başlıklar (Geçici modal varsa hariç tut)
     const headings = Array.from(mainEl.querySelectorAll('h1, h2, h3'))
+      .filter(h => !h.closest('[role="dialog"], [aria-modal="true"], [class*="backdrop" i]'))
       .map(h => (h.innerText || '').trim())
       .filter(Boolean)
       .join(' | ');
@@ -585,7 +765,7 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * Bir öğenin güvenli navigasyon olup olmadığını ve yıkıcı olmadığını doğrular
+   * Bir öğenin güvenli navigasyon olup olmadığını doğrular
    */
   function evaluateNavigationElementSafety(el) {
     const tag = el.tagName.toLowerCase();
@@ -599,7 +779,7 @@ VIEWPORT    : ${viewport}
 
     const combinedMeta = `${text} ${ariaLabel} ${titleAttr} ${actionAttr} ${testId}`.trim();
 
-    // 1. Yıkıcı Anahtar Kelime Kontrolü (Kesin Reddet)
+    // 1. Yıkıcı Anahtar Kelime Kontrolü
     if (DESTRUCTIVE_KEYWORDS_REGEX.test(combinedMeta)) {
       return {
         isSafe: false,
@@ -654,17 +834,18 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * Sayfadaki tüm güvenli SPA Menü & Sekme Öğelerini Keşfeder
+   * Sayfadaki tüm güvenli SPA Menü & Sekme Öğelerini Kanonik Kimlikleriyle Keşfeder
    */
   function discoverSpaNavigationElements() {
     const candidates = [];
     const skippedElements = [];
-    const seenLabels = new Set();
+    const seenCanonicalIds = new Set();
 
-    // Mobil modda kapalı hamburger menüsü varsa tespit et
+    // Aktif modal var mı kontrol et
+    const activeModal = detectActiveModal();
+
     const mobileHamburger = document.querySelector('button[aria-label*="menu" i], button[aria-label*="menü" i], [class*="hamburger" i], [class*="nav-toggle" i]');
 
-    // Aday seçiciler
     const selectorQueries = [
       'nav a', 'nav button', 'nav [role="tab"]', 'nav [role="menuitem"]',
       'aside a', 'aside button', 'aside [role="tab"]',
@@ -679,12 +860,16 @@ VIEWPORT    : ${viewport}
 
     const elementSet = new Set();
     selectorQueries.forEach(query => {
-      document.querySelectorAll(query).forEach(el => elementSet.add(el));
+      document.querySelectorAll(query).forEach(el => {
+        // Modal içerisindeki butonları ana sayfa navigasyonu sayma
+        if (!el.closest('[role="dialog"], [aria-modal="true"], [class*="backdrop" i]')) {
+          elementSet.add(el);
+        }
+      });
     });
 
     let index = 0;
     for (const el of elementSet) {
-      // Görünürlük kontrolü
       const rect = el.getBoundingClientRect();
       const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
       if (!isVisible && !el.closest('[class*="mobile-menu" i]')) continue;
@@ -700,26 +885,30 @@ VIEWPORT    : ${viewport}
       }
 
       const cleanLabel = evalResult.label.replace(/\s+/g, ' ').trim();
-      const normKey = cleanLabel.toLowerCase();
-
-      // Duplicate kontrolü
       if (!cleanLabel || cleanLabel.length < 2 || cleanLabel.length > 50) continue;
-      if (seenLabels.has(normKey)) continue;
-      seenLabels.add(normKey);
+
+      // Kanonik Ekran Çözümleme (Desktop ve Mobile'ı ortak kimlikle eşleştir)
+      const canonical = resolveCanonicalScreen(cleanLabel, el.getAttribute('href') || '');
+      if (seenCanonicalIds.has(canonical.id)) continue;
+      seenCanonicalIds.add(canonical.id);
 
       index++;
       const navId = `snap_nav_${index}`;
       el.setAttribute('data-snaphtml-nav-id', navId);
 
-      const logicalId = generateLogicalScreenId(cleanLabel, index);
+      const isBottomNav = Boolean(el.closest('[class*="bottom-nav" i], [class*="tabbar" i]'));
+      const isHamburgerItem = Boolean(el.closest('[class*="mobile-menu" i], [class*="drawer" i]'));
 
       candidates.push({
         navId,
         label: cleanLabel,
-        logicalId,
+        logicalId: canonical.id,
+        canonicalTitle: canonical.title,
         tagName: el.tagName.toLowerCase(),
         role: el.getAttribute('role') || '',
         href: el.getAttribute('href') || '',
+        isBottomNav,
+        isHamburgerItem,
         active: el.getAttribute('aria-selected') === 'true' || el.getAttribute('data-state') === 'active' || el.classList.contains('active')
       });
     }
@@ -728,17 +917,34 @@ VIEWPORT    : ${viewport}
       candidates,
       skippedElements,
       hasMobileHamburger: Boolean(mobileHamburger),
+      activeModal: activeModal ? { title: activeModal.title, isDevHubProjectModal: activeModal.isDevHubProjectModal } : null,
       currentFingerprint: computeDomFingerprint()
     };
   }
 
   /**
-   * Güvenli bir SPA Navigasyon Öğesine Tıklar ve Ekran Değişimini Bekler
+   * Güvenli bir SPA Navigasyon Öğesine Tıklar, Temiz Durumu Sağlar ve Ekran Değişimini Bekler
    */
-  async function performSafeNavigationClick(navId) {
+  async function performSafeNavigationClick(navId, canonicalId = null) {
     enableCrawlSafetyOverrides();
 
-    const el = document.querySelector(`[data-snaphtml-nav-id="${navId}"]`);
+    // Önceki ekrandan kalan açık modal veya overlay varsa temizle
+    await ensureCleanNavigationState();
+
+    let el = document.querySelector(`[data-snaphtml-nav-id="${navId}"]`);
+    if (!el && canonicalId) {
+      // Eğer ID değiştiyse kanonik kimliğe göre yeniden ara
+      const allNav = document.querySelectorAll('nav a, nav button, aside a, aside button, [role="tab"], [class*="bottom-nav" i] *');
+      for (const item of allNav) {
+        const text = (item.innerText || item.getAttribute('aria-label') || '').trim();
+        const resolved = resolveCanonicalScreen(text, item.getAttribute('href') || '');
+        if (resolved.id === canonicalId) {
+          el = item;
+          break;
+        }
+      }
+    }
+
     if (!el) {
       return { success: false, error: `Navigasyon öğesi bulunamadı: ${navId}` };
     }
@@ -747,12 +953,10 @@ VIEWPORT    : ${viewport}
     const beforeUrl = window.location.href;
 
     try {
-      // Görünür alana getir
       try {
         el.scrollIntoView({ behavior: 'instant', block: 'center' });
       } catch {}
 
-      // Fare ve işaretçi olaylarını sırayla ateşle (React/Vue onClick uyumluluğu)
       const events = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
       for (const evName of events) {
         el.dispatchEvent(new MouseEvent(evName, {
@@ -762,23 +966,31 @@ VIEWPORT    : ${viewport}
         }));
       }
 
-      // Doğrudan .click() tetikle
       try {
         el.click();
       } catch {}
 
-      // DOM ve veri yükleme stabilizasyonunu bekle
       await waitForDomStabilization(3000, 350);
 
-      // Async loading / spinner varsa ek tolerans
       const spinner = document.querySelector('.spinner, .loading, [aria-busy="true"], [data-loading="true"]');
       if (spinner) {
         await new Promise(r => setTimeout(r, 600));
       }
 
+      // Tıklama sonrası mobil menü drawer'ı açık kaldıysa kapat (ekranı örtmesin)
+      const openDrawer = document.querySelector('[class*="mobile-menu" i][data-state="open"], [class*="drawer" i][data-state="open"]');
+      if (openDrawer) {
+        const escEvent = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true });
+        document.dispatchEvent(escEvent);
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      // Tıklama sonrası beklenmeyen bir modal açıldı mı kontrol et
+      const postModal = detectActiveModal();
+      const isBlocked = Boolean(postModal && postModal.isOpen);
+
       const afterFingerprint = computeDomFingerprint();
       const afterUrl = window.location.href;
-
       const changed = beforeFingerprint.hash !== afterFingerprint.hash || beforeUrl !== afterUrl;
 
       return {
@@ -786,7 +998,9 @@ VIEWPORT    : ${viewport}
         changed,
         fingerprint: afterFingerprint,
         url: afterUrl,
-        title: document.title || 'Başlıksız Ekran'
+        title: document.title || 'Başlıksız Ekran',
+        isBlocked,
+        activeModalTitle: postModal ? postModal.title : null
       };
     } catch (err) {
       return { success: false, error: err.message };
@@ -898,7 +1112,6 @@ VIEWPORT    : ${viewport}
         if (parsed.origin !== currentOrigin) return;
         if (/\.(pdf|zip|rar|tar|gz|mp4|mp3|exe|apk|dmg|iso)$/i.test(parsed.pathname)) return;
 
-        // Güvenlik: Oturumu kapatacak veya veri silecek rotaları atla
         if (DANGEROUS_LINK_PATTERNS.some(re => re.test(parsed.pathname))) return;
 
         if (!seenUrls.has(absUrl)) {
@@ -915,7 +1128,7 @@ VIEWPORT    : ${viewport}
       } catch {}
     });
 
-    // 2. Modern SPA Tab / Sekme Butonları ([role="tab"], [data-route], [data-href])
+    // 2. Modern SPA Tab / Sekme Butonları
     document.querySelectorAll('[role="tab"], [data-route], [data-href], [data-tab]').forEach(el => {
       try {
         const rawRoute = el.getAttribute('data-href') || el.getAttribute('data-route') || el.getAttribute('href');
@@ -963,7 +1176,7 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * AI Asistanları (Claude/Cursor) için HTML'i budar; ağır Base64 görsel ve fontları hafifletir.
+   * AI Asistanları (Claude/Cursor) için HTML'i budar
    */
   function pruneHtmlForAi(root) {
     const clone = root.cloneNode(true);
@@ -983,7 +1196,7 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * Klonlama Ana Akışı V2
+   * Klonlama Ana Akışı V2.1
    */
   async function clonePage(options = {}, onProgress = null) {
     const opts = {
@@ -1045,7 +1258,6 @@ VIEWPORT    : ${viewport}
       cloneDoc.insertBefore(headEl, cloneDoc.firstChild);
     }
 
-    // Çok sayfalı ZIP arşivinde remote base tag yerel href="./sayfa.html" linklerini bozar
     if (options.isCrawlPage) {
       const existingBase = headEl.querySelector('base');
       if (existingBase) existingBase.remove();
@@ -1064,7 +1276,7 @@ VIEWPORT    : ${viewport}
       headEl.appendChild(aiScript);
     }
 
-    // Mobil HTML ise: Bağımsız masaüstü açılışında 390px çerçeve sağlayan containment betiğini ekle
+    // Mobil HTML ise: Bağımsız açılışta 390px çerçeve sağlayan containment betiğini ekle
     if (opts.isMobile) {
       const containmentSnippet = generateMobileContainmentScript(opts.viewport);
       const tempDiv = document.createElement('div');
@@ -1136,11 +1348,56 @@ VIEWPORT    : ${viewport}
       return false;
     }
 
-    // 4. Güvenli SPA Tıklaması Gerçekleştir
+    // 4. Açık Modalı Tespit Et
+    if (request.action === 'detectActiveModal') {
+      try {
+        const modal = detectActiveModal();
+        sendResponse({
+          success: true,
+          hasModal: Boolean(modal),
+          modal: modal ? {
+            title: modal.title,
+            isDevHubProjectModal: modal.isDevHubProjectModal,
+            hasInputs: modal.hasInputs
+          } : null
+        });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return false;
+    }
+
+    // 5. Açık Modalı Güvenle Kapat (Safe Modal Dismissal)
+    if (request.action === 'dismissActiveModal') {
+      (async () => {
+        try {
+          const result = await dismissActiveModal();
+          sendResponse({ success: result.success, ...result });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+    }
+
+    // 6. Temiz Navigasyon Durumunu Sağla (Clean State)
+    if (request.action === 'ensureCleanState') {
+      (async () => {
+        try {
+          const result = await ensureCleanNavigationState();
+          sendResponse({ success: result.clean, ...result });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+    }
+
+    // 7. Güvenli SPA Tıklaması Gerçekleştir
     if (request.action === 'performSafeClick') {
       (async () => {
         try {
-          const result = await performSafeNavigationClick(request.navId);
+          const result = await performSafeNavigationClick(request.navId, request.canonicalId);
           sendResponse(result);
         } catch (err) {
           sendResponse({ success: false, error: err.message });
@@ -1149,7 +1406,7 @@ VIEWPORT    : ${viewport}
       return true;
     }
 
-    // 5. O Anki DOM Parmak İzini Al
+    // 8. O Anki DOM Parmak İzini Al
     if (request.action === 'getDomFingerprint') {
       try {
         const fp = computeDomFingerprint();
@@ -1160,7 +1417,7 @@ VIEWPORT    : ${viewport}
       return false;
     }
 
-    // 6. Hızlı Sayfa İstatistikleri
+    // 9. Hızlı Sayfa İstatistikleri
     if (request.action === 'getPageQuickStats') {
       sendResponse({
         success: true,

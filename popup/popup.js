@@ -149,20 +149,35 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res && res.success && res.candidates) {
         discoveredCandidates = res.candidates;
         foundSpaCount.textContent = discoveredCandidates.length;
-        metricSpaLinks.textContent = `${discoveredCandidates.length} menü`;
-        renderSpaList(discoveredCandidates);
+        if (res.activeModal) {
+          metricSpaLinks.textContent = `${discoveredCandidates.length} menü (Modal: Algılandı)`;
+        } else {
+          metricSpaLinks.textContent = `${discoveredCandidates.length} menü`;
+        }
+        renderSpaList(discoveredCandidates, res.activeModal);
       }
     } catch (err) {
       console.warn('SPA keşif hatası:', err);
     }
   }
 
-  function renderSpaList(candidates) {
-    if (candidates.length === 0) {
+  function renderSpaList(candidates, activeModal = null) {
+    let modalNotice = '';
+    if (activeModal) {
+      modalNotice = `
+        <div class="link-checkbox-item" style="background: rgba(56, 189, 248, 0.12); padding: 5px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.3);">
+          <span style="color: #38bdf8;">🛡️</span>
+          <span><strong>Modal: ${activeModal.title}</strong><br><small style="color: #94a3b8;">Önce ayrı kaydedilip güvenle kapatılacak</small></span>
+        </div>
+      `;
+    }
+
+    if (candidates.length === 0 && !activeModal) {
       spaList.innerHTML = '<span style="color: #94a3b8; padding: 4px;">Güvenli SPA menüsü tespit edilemedi.</span>';
       return;
     }
-    spaList.innerHTML = candidates.map((c, idx) => `
+
+    spaList.innerHTML = modalNotice + candidates.map((c, idx) => `
       <div class="link-checkbox-item">
         <span style="color: #38bdf8;">✓</span>
         <span><strong>${c.label}</strong> <small style="color: #94a3b8;">(${c.logicalId})</small></span>
