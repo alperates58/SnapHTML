@@ -536,3 +536,124 @@ body {
   font-size: 10px;
   color: var(--text-muted);
 }
+
+/* SNAPHTML V2 - VIEWPORT & SPA CRAWLER STYLES */
+.viewport-section {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.viewport-selector {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.vp-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
+}
+
+.vp-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.vp-btn.active {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: #38bdf8;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.vp-btn .vp-icon {
+  font-size: 13px;
+}
+
+.vp-btn .vp-lbl {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* TARAMA MODU SEÇİCİ */
+.mode-selector {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr 1fr;
+  gap: 5px;
+}
+
+.mode-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text-muted);
+}
+
+.mode-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.mode-btn.active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: var(--accent-emerald);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+}
+
+.mode-btn .m-title {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mode-btn .m-sub {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* İlerleme Bilgi Satırı & İptal Butonu */
+.progress-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.btn-cancel {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-cancel:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fff;
+}

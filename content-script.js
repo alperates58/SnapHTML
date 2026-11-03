@@ -1,13 +1,34 @@
 /**
- * SnapHTML - Content Script (DOM & Asset Cloner Engine)
+ * SnapHTML - Content Script (DOM & Asset Cloner Engine V2)
  * Web sayfalarını CSS, fontlar, görseller, anlık form/DOM durumu ve
  * AI metadata'sı ile eksiksiz, tek parça bağımsız HTML olarak klonlar.
- * Çok sayfalı derinlik (Crawl Depth) için bağlantı keşfi ve yerel link dönüştürmeyi destekler.
+ * Gerçek Mobil/Masaüstü Viewport desteği, Akıllı SPA State Keşif Motoru (React, Vue, Angular)
+ * ve Güvenli Navigasyon (Safe Crawling) yetenekleri içerir.
  */
 
 (() => {
   if (window.__snaphtml_engine_ready) return;
   window.__snaphtml_engine_ready = true;
+
+  // Dialogları baskıla (tarayıcının donmasını veya alert/confirm ile takılmasını engeller)
+  let crawlModeActive = false;
+  const originalConfirm = window.confirm;
+  const originalAlert = window.alert;
+  const originalPrompt = window.prompt;
+
+  function enableCrawlSafetyOverrides() {
+    crawlModeActive = true;
+    window.confirm = () => false; // Yıkıcı aksiyon onaylarını her zaman iptal et
+    window.alert = () => {};
+    window.prompt = () => null;
+  }
+
+  function disableCrawlSafetyOverrides() {
+    crawlModeActive = false;
+    window.confirm = originalConfirm;
+    window.alert = originalAlert;
+    window.prompt = originalPrompt;
+  }
 
   /**
    * Bağıl (relative) URL'leri mutlak (absolute) URL'ye çevirir
@@ -299,7 +320,7 @@
     const scripts = cloneRoot.querySelectorAll('script');
     scripts.forEach(script => {
       const type = script.getAttribute('type') || '';
-      if (type.includes('json') || script.id === 'snaphtml-ai-context') {
+      if (type.includes('json') || script.id === 'snaphtml-ai-context' || script.id === 'snaphtml-mobile-containment') {
         return;
       }
       script.setAttribute('type', 'text/plain');
@@ -321,10 +342,14 @@
   /**
    * AI Asistanları için semantik özet üretir
    */
-  function generateAiContext(cloneDoc) {
+  function generateAiContext(cloneDoc, customViewport = null) {
     const title = document.title || 'Başlıksız Web Sayfası';
     const url = window.location.href;
-    const viewport = `${window.innerWidth}×${window.innerHeight} (DPR: ${window.devicePixelRatio || 1})`;
+    const vpWidth = customViewport?.width || window.innerWidth;
+    const vpHeight = customViewport?.height || window.innerHeight;
+    const vpDpr = customViewport?.dpr || window.devicePixelRatio || 1;
+    const vpMode = customViewport?.mode || (vpWidth <= 600 ? 'mobile' : 'desktop');
+    const viewport = `${vpWidth}×${vpHeight} (DPR: ${vpDpr}, Mod: ${vpMode})`;
     const timestamp = new Date().toISOString();
 
     const navCount = cloneDoc.querySelectorAll('nav, [role="navigation"]').length;
@@ -372,6 +397,12 @@
       title,
       timestamp,
       viewport,
+      viewportDetails: {
+        width: vpWidth,
+        height: vpHeight,
+        dpr: vpDpr,
+        mode: vpMode
+      },
       frameworks: detected,
       domStats: {
         totalNodes: cloneDoc.querySelectorAll('*').length,
@@ -424,6 +455,16 @@ VIEWPORT    : ${viewport}
     };
   }
 
+  // ============================================================================
+  // SPA STATE DISCOVERY & SAFE CRAWLING ENGINE
+  // ============================================================================
+
+  // Yıkıcı / Tehlikeli Eylemler (Kesinlikle Tıklanmayacak İşlemler)
+  const DESTRUCTIVE_KEYWORDS_REGEX = /\b(delete|remove|sil|kaldır|drop|destroy|clear|purge|çıkış|logout|signout|sign-out|log-out|disconnect|save|kaydet|submit|gönder|deploy|yayınla|dağıt|push|commit|migrate|migration|öde|pay|checkout|buy|satın|iptal|cancel|onayla|confirm|reset|format|upload|yükle|kill|terminate|stop|trash|unsubscribe)\b/i;
+
+  // Güvenli Navigasyon / Sekme Anahtar Kelimeleri
+  const SAFE_NAV_KEYWORDS = /\b(sohbet|chat|kod|code|editör|editor|git|ajan|agent|ajanlar|agents|veritabanı|database|db|dağıtımlar|deployments|dağıtım listesi|ayarlar|settings|ayar|setting|genel|general|panel|dashboard|proje|projeler|project|projects|profil|profile|log|logs|metrik|metrics|doküman|docs|hakkında|about|yardım|help|keşfet|explore|sekme|tab|overview|genel bakış|ana sayfa|home|activity|aktivite)\b/i;
+
   const DANGEROUS_LINK_PATTERNS = [
     /\/logout/i, /\/log-out/i, /\/cikis/i, /\/signout/i, /\/sign-out/i,
     /\/auth\/logout/i, /\/delete/i, /\/sil/i, /\/disconnect/i, /\/unsubscribe/i,
@@ -431,7 +472,412 @@ VIEWPORT    : ${viewport}
   ];
 
   /**
-   * DERİNLİK MOTORU: Sayfadaki aynı domaine ait iç bağlantıları (Sekmeler, Menü linkleri vb.) keşfeder
+   * Mantıksal Ekran ID'si üretir (Örn: screen_chat, screen_editor, screen_git...)
+   */
+  function generateLogicalScreenId(rawTitle, fallbackIndex = 0) {
+    const text = (rawTitle || '').toLowerCase().trim();
+    if (/sohbet|chat/.test(text)) return 'screen_chat';
+    if (/kod|code|editör|editor/.test(text)) return 'screen_editor';
+    if (/\bgit\b/.test(text)) return 'screen_git';
+    if (/ajan|agent/.test(text)) return 'screen_agents';
+    if (/veritaban|database|\bdb\b/.test(text)) return 'screen_database';
+    if (/dağıtım|deploy/.test(text)) return 'screen_deployments';
+    if (/ayar|setting/.test(text)) return 'screen_settings';
+    if (/dashboard|panel|genel bakış|overview/.test(text)) return 'screen_dashboard';
+    if (/proje|project/.test(text)) return 'screen_projects';
+    if (/profil|profile/.test(text)) return 'screen_profile';
+    if (/log/.test(text)) return 'screen_logs';
+    if (/metrik|metric/.test(text)) return 'screen_metrics';
+
+    // Genel slug üretici
+    let slug = text.replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    if (!slug) slug = `screen_${fallbackIndex}`;
+    return `screen_${slug.slice(0, 24)}`;
+  }
+
+  /**
+   * DOM Stabilizasyonunu Bekler (MutationObserver + Debounce)
+   */
+  function waitForDomStabilization(timeout = 3000, debounceTime = 300) {
+    return new Promise((resolve) => {
+      let timer = null;
+      let maxTimer = null;
+      let observer = null;
+
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        if (maxTimer) clearTimeout(maxTimer);
+        if (observer) observer.disconnect();
+      };
+
+      const finish = () => {
+        cleanup();
+        resolve();
+      };
+
+      maxTimer = setTimeout(finish, timeout);
+
+      try {
+        observer = new MutationObserver(() => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(finish, debounceTime);
+        });
+
+        observer.observe(document.body || document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          characterData: true
+        });
+
+        timer = setTimeout(finish, debounceTime);
+      } catch {
+        setTimeout(finish, 800);
+      }
+    });
+  }
+
+  /**
+   * O anki ekranın semantik içerik ve yapı parmak izini (Fingerprint) hesaplar
+   */
+  function computeDomFingerprint() {
+    const mainEl = document.querySelector('main, [role="main"]') || document.body;
+    
+    // 1. Başlıklar
+    const headings = Array.from(mainEl.querySelectorAll('h1, h2, h3'))
+      .map(h => (h.innerText || '').trim())
+      .filter(Boolean)
+      .join(' | ');
+
+    // 2. Aktif Navigasyon Durumu
+    const activeNav = Array.from(document.querySelectorAll('[role="tab"][aria-selected="true"], [data-state="active"], [aria-current="page"], .active'))
+      .map(el => (el.innerText || el.getAttribute('aria-label') || '').trim())
+      .filter(Boolean)
+      .join(' > ');
+
+    // 3. İçerik Örneği (ilk 400 karakter)
+    const textSample = (mainEl.innerText || '')
+      .slice(0, 400)
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 4. Yapısal İstatistikler
+    const nodeCount = mainEl.querySelectorAll('*').length;
+    const buttonCount = mainEl.querySelectorAll('button').length;
+    const inputCount = mainEl.querySelectorAll('input, select, textarea').length;
+
+    // 5. 32-bit FNV-1a Hash
+    const rawFingerprint = `${headings}:::${activeNav}:::${textSample.slice(0, 180)}:::${nodeCount}:${buttonCount}:${inputCount}`;
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < rawFingerprint.length; i++) {
+      hash ^= rawFingerprint.charCodeAt(i);
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    const hexHash = ('00000000' + (hash >>> 0).toString(16)).slice(-8);
+
+    return {
+      hash: hexHash,
+      headings: headings || document.title || 'Ekran',
+      activeNav: activeNav || 'Genel',
+      textSample: textSample.slice(0, 80),
+      stats: { nodeCount, buttonCount, inputCount }
+    };
+  }
+
+  /**
+   * Bir öğenin güvenli navigasyon olup olmadığını ve yıkıcı olmadığını doğrular
+   */
+  function evaluateNavigationElementSafety(el) {
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    const text = (el.innerText || el.textContent || '').trim();
+    const ariaLabel = el.getAttribute('aria-label') || '';
+    const titleAttr = el.getAttribute('title') || '';
+    const actionAttr = el.getAttribute('data-action') || '';
+    const testId = el.getAttribute('data-testid') || '';
+    const role = el.getAttribute('role') || '';
+
+    const combinedMeta = `${text} ${ariaLabel} ${titleAttr} ${actionAttr} ${testId}`.trim();
+
+    // 1. Yıkıcı Anahtar Kelime Kontrolü (Kesin Reddet)
+    if (DESTRUCTIVE_KEYWORDS_REGEX.test(combinedMeta)) {
+      return {
+        isSafe: false,
+        reason: `Yıkıcı kelime eşleşmesi: "${combinedMeta.slice(0, 30)}"`
+      };
+    }
+
+    // 2. Form Gönderim Butonları
+    if (type === 'submit') {
+      return {
+        isSafe: false,
+        reason: 'Form gönderme butonu (type="submit")'
+      };
+    }
+
+    // 3. Dosya Girişi
+    if (type === 'file') {
+      return {
+        isSafe: false,
+        reason: 'Dosya yükleme kontrolü'
+      };
+    }
+
+    // 4. Tehlikeli Link Kontrolü
+    const href = el.getAttribute('href');
+    if (href) {
+      if (href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+        return { isSafe: false, reason: 'Protokol linki' };
+      }
+      if (DANGEROUS_LINK_PATTERNS.some(re => re.test(href))) {
+        return { isSafe: false, reason: 'Tehlikeli rota linki' };
+      }
+    }
+
+    // 5. Pozitif Navigasyon Doğrulaması
+    const isTab = role === 'tab' || el.hasAttribute('data-tab') || el.hasAttribute('aria-controls') || el.hasAttribute('data-state');
+    const isMenuItem = role === 'menuitem' || role === 'button';
+    const isInsideNav = Boolean(el.closest('nav, aside, header, [role="navigation"], [role="tablist"], [class*="sidebar" i], [class*="bottom-nav" i], [class*="tabbar" i]'));
+    const matchesKeyword = SAFE_NAV_KEYWORDS.test(combinedMeta);
+
+    if (isTab || matchesKeyword || (isInsideNav && (tag === 'a' || tag === 'button' || isMenuItem))) {
+      return {
+        isSafe: true,
+        label: text || ariaLabel || titleAttr || 'Görünüm'
+      };
+    }
+
+    return {
+      isSafe: false,
+      reason: 'Belirgin bir navigasyon veya sekme yapısına ait değil'
+    };
+  }
+
+  /**
+   * Sayfadaki tüm güvenli SPA Menü & Sekme Öğelerini Keşfeder
+   */
+  function discoverSpaNavigationElements() {
+    const candidates = [];
+    const skippedElements = [];
+    const seenLabels = new Set();
+
+    // Mobil modda kapalı hamburger menüsü varsa tespit et
+    const mobileHamburger = document.querySelector('button[aria-label*="menu" i], button[aria-label*="menü" i], [class*="hamburger" i], [class*="nav-toggle" i]');
+
+    // Aday seçiciler
+    const selectorQueries = [
+      'nav a', 'nav button', 'nav [role="tab"]', 'nav [role="menuitem"]',
+      'aside a', 'aside button', 'aside [role="tab"]',
+      'header a', 'header button',
+      '[role="navigation"] a', '[role="navigation"] button',
+      '[role="tablist"] [role="tab"]', '[role="tab"]',
+      '[data-route]', '[data-href]', '[data-tab]',
+      '[class*="sidebar" i] a', '[class*="sidebar" i] button',
+      '[class*="bottom-nav" i] a', '[class*="bottom-nav" i] button',
+      '[class*="tabbar" i] a', '[class*="tabbar" i] button'
+    ];
+
+    const elementSet = new Set();
+    selectorQueries.forEach(query => {
+      document.querySelectorAll(query).forEach(el => elementSet.add(el));
+    });
+
+    let index = 0;
+    for (const el of elementSet) {
+      // Görünürlük kontrolü
+      const rect = el.getBoundingClientRect();
+      const isVisible = rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+      if (!isVisible && !el.closest('[class*="mobile-menu" i]')) continue;
+
+      const evalResult = evaluateNavigationElementSafety(el);
+      const rawText = (el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
+
+      if (!evalResult.isSafe) {
+        if (rawText && rawText.length < 40) {
+          skippedElements.push({ text: rawText, reason: evalResult.reason });
+        }
+        continue;
+      }
+
+      const cleanLabel = evalResult.label.replace(/\s+/g, ' ').trim();
+      const normKey = cleanLabel.toLowerCase();
+
+      // Duplicate kontrolü
+      if (!cleanLabel || cleanLabel.length < 2 || cleanLabel.length > 50) continue;
+      if (seenLabels.has(normKey)) continue;
+      seenLabels.add(normKey);
+
+      index++;
+      const navId = `snap_nav_${index}`;
+      el.setAttribute('data-snaphtml-nav-id', navId);
+
+      const logicalId = generateLogicalScreenId(cleanLabel, index);
+
+      candidates.push({
+        navId,
+        label: cleanLabel,
+        logicalId,
+        tagName: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || '',
+        href: el.getAttribute('href') || '',
+        active: el.getAttribute('aria-selected') === 'true' || el.getAttribute('data-state') === 'active' || el.classList.contains('active')
+      });
+    }
+
+    return {
+      candidates,
+      skippedElements,
+      hasMobileHamburger: Boolean(mobileHamburger),
+      currentFingerprint: computeDomFingerprint()
+    };
+  }
+
+  /**
+   * Güvenli bir SPA Navigasyon Öğesine Tıklar ve Ekran Değişimini Bekler
+   */
+  async function performSafeNavigationClick(navId) {
+    enableCrawlSafetyOverrides();
+
+    const el = document.querySelector(`[data-snaphtml-nav-id="${navId}"]`);
+    if (!el) {
+      return { success: false, error: `Navigasyon öğesi bulunamadı: ${navId}` };
+    }
+
+    const beforeFingerprint = computeDomFingerprint();
+    const beforeUrl = window.location.href;
+
+    try {
+      // Görünür alana getir
+      try {
+        el.scrollIntoView({ behavior: 'instant', block: 'center' });
+      } catch {}
+
+      // Fare ve işaretçi olaylarını sırayla ateşle (React/Vue onClick uyumluluğu)
+      const events = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+      for (const evName of events) {
+        el.dispatchEvent(new MouseEvent(evName, {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        }));
+      }
+
+      // Doğrudan .click() tetikle
+      try {
+        el.click();
+      } catch {}
+
+      // DOM ve veri yükleme stabilizasyonunu bekle
+      await waitForDomStabilization(3000, 350);
+
+      // Async loading / spinner varsa ek tolerans
+      const spinner = document.querySelector('.spinner, .loading, [aria-busy="true"], [data-loading="true"]');
+      if (spinner) {
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      const afterFingerprint = computeDomFingerprint();
+      const afterUrl = window.location.href;
+
+      const changed = beforeFingerprint.hash !== afterFingerprint.hash || beforeUrl !== afterUrl;
+
+      return {
+        success: true,
+        changed,
+        fingerprint: afterFingerprint,
+        url: afterUrl,
+        title: document.title || 'Başlıksız Ekran'
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Mobil HTML'in masaüstünde doğrudan açıldığında 390px mobil çerçeveyle render edilmesini sağlayan
+   * bağımsız ve sıfır bağımlılıklı Responsive Containment betiği üretir.
+   */
+  function generateMobileContainmentScript(viewport) {
+    const w = viewport?.width || 390;
+    const h = viewport?.height || 844;
+    const dpr = viewport?.dpr || 3;
+
+    return `
+<script id="snaphtml-mobile-containment">
+(function() {
+  if (window.self !== window.top) return;
+  if (window.innerWidth <= 520) return;
+
+  window.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('snaphtml-standalone-mobile-root')) return;
+
+    var origHtml = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML.replace('id="snaphtml-mobile-containment"', 'id="snaphtml-mobile-containment-inert"');
+
+    document.documentElement.innerHTML = [
+      '<head>',
+      '<meta charset="utf-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      '<title>' + (document.title || 'Mobil Snapshot') + ' [SnapHTML Mobil Görünüm]</title>',
+      '<style>',
+      '* { box-sizing: border-box; margin: 0; padding: 0; }',
+      'body { background: #090d16; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }',
+      '.sh-bar { width: 100%; background: #131c2e; border-bottom: 1px solid #1e293b; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }',
+      '.sh-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #38bdf8; font-size: 14px; }',
+      '.sh-meta { color: #94a3b8; font-size: 12px; margin-left: 8px; font-weight: normal; }',
+      '.sh-actions { display: flex; gap: 8px; }',
+      '.sh-btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; }',
+      '.sh-btn:hover { background: #334155; }',
+      '.sh-btn.active { background: #0284c7; border-color: #38bdf8; color: #fff; box-shadow: 0 0 12px rgba(56, 189, 248, 0.35); }',
+      '.sh-container { flex: 1; display: flex; justify-content: center; align-items: flex-start; padding: 36px 16px; width: 100%; }',
+      '.sh-phone-frame { width: ${w}px; height: ${h}px; border-radius: 46px; border: 12px solid #1e293b; box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px #334155; background: #000; overflow: hidden; position: relative; transition: all 0.3s ease; }',
+      '.sh-phone-notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 26px; background: #1e293b; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; z-index: 20; pointer-events: none; }',
+      '.sh-phone-frame iframe { width: 100%; height: 100%; border: none; background: #fff; }',
+      '.sh-full-view .sh-phone-frame { width: 100%; height: calc(100vh - 65px); border-radius: 0; border: none; box-shadow: none; }',
+      '.sh-full-view .sh-phone-notch { display: none; }',
+      '</style>',
+      '</head>',
+      '<body id="snaphtml-standalone-mobile-root">',
+      '<header class="sh-bar">',
+      '  <div class="sh-brand">',
+      '    <span>📱 SnapHTML Mobil Snapshot</span>',
+      '    <span class="sh-meta">Viewport: ${w}×${h} (DPR: ${dpr})</span>',
+      '  </div>',
+      '  <div class="sh-actions">',
+      '    <button class="sh-btn active" id="shBtnFrame">📱 ${w}px Mobil Çerçeve</button>',
+      '    <button class="sh-btn" id="shBtnFull">🖥️ Masaüstü Tam Genişlik</button>',
+      '  </div>',
+      '</header>',
+      '<main class="sh-container" id="shContainer">',
+      '  <div class="sh-phone-frame">',
+      '    <div class="sh-phone-notch"></div>',
+      '    <iframe id="shFrame" sandbox="allow-same-origin allow-scripts allow-popups" srcdoc=""></iframe>',
+      '  </div>',
+      '</main>',
+      '</body>'
+    ].join('\\n');
+
+    var frame = document.getElementById('shFrame');
+    if (frame) frame.srcdoc = origHtml;
+
+    document.getElementById('shBtnFrame').addEventListener('click', function() {
+      document.getElementById('shContainer').classList.remove('sh-full-view');
+      document.getElementById('shBtnFrame').classList.add('active');
+      document.getElementById('shBtnFull').classList.remove('active');
+    });
+
+    document.getElementById('shBtnFull').addEventListener('click', function() {
+      document.getElementById('shContainer').classList.add('sh-full-view');
+      document.getElementById('shBtnFull').classList.add('active');
+      document.getElementById('shBtnFrame').classList.remove('active');
+    });
+  });
+})();
+</script>
+`;
+  }
+
+  /**
+   * DERİNLİK MOTORU: Sayfadaki aynı domaine ait iç bağlantıları keşfeder
    */
   function discoverInternalLinks() {
     const links = [];
@@ -498,7 +944,7 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * Sayfayı hızlıca kaydırarak lazy-load (gecikmeli) görselleri ve bileşenleri uyandırır
+   * Sayfayı hızlıca kaydırarak lazy-load görselleri ve bileşenleri uyandırır
    */
   async function triggerLazyLoadPass(onProgress) {
     if (onProgress) onProgress('Görseller uyandırılıyor (Lazy-load pass)...');
@@ -537,7 +983,7 @@ VIEWPORT    : ${viewport}
   }
 
   /**
-   * Klonlama Ana Akışı
+   * Klonlama Ana Akışı V2
    */
   async function clonePage(options = {}, onProgress = null) {
     const opts = {
@@ -548,7 +994,9 @@ VIEWPORT    : ${viewport}
       addAiHeader: options.addAiHeader !== false,
       inlineStyles: options.inlineStyles !== false,
       dietMode: options.dietMode === true,
-      triggerScroll: options.triggerScroll !== false && !options.isCrawlPage
+      triggerScroll: options.triggerScroll !== false && !options.isCrawlPage,
+      viewport: options.viewport || null,
+      isMobile: options.isMobile || Boolean(options.viewport?.mobile) || window.innerWidth <= 600
     };
 
     if (opts.triggerScroll) {
@@ -607,13 +1055,24 @@ VIEWPORT    : ${viewport}
       headEl.insertBefore(baseTag, headEl.firstChild);
     }
 
-    const aiContext = generateAiContext(cloneDoc);
+    const aiContext = generateAiContext(cloneDoc, opts.viewport);
     if (opts.addAiHeader) {
       const aiScript = document.createElement('script');
       aiScript.type = 'application/json';
       aiScript.id = 'snaphtml-ai-context';
       aiScript.textContent = aiContext.json;
       headEl.appendChild(aiScript);
+    }
+
+    // Mobil HTML ise: Bağımsız masaüstü açılışında 390px çerçeve sağlayan containment betiğini ekle
+    if (opts.isMobile) {
+      const containmentSnippet = generateMobileContainmentScript(opts.viewport);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = containmentSnippet;
+      const containmentScript = tempDiv.firstElementChild;
+      if (containmentScript) {
+        headEl.appendChild(containmentScript);
+      }
     }
 
     const prunedDoc = pruneHtmlForAi(cloneDoc);
@@ -629,12 +1088,16 @@ VIEWPORT    : ${viewport}
       metadata: aiContext.data,
       title: document.title || 'snapshot',
       url: window.location.href,
-      discoveredLinks: discoverInternalLinks()
+      discoveredLinks: discoverInternalLinks(),
+      fingerprint: computeDomFingerprint()
     };
   }
 
-  // Mesaj dinleyici
+  // ============================================================================
+  // MESAJ DİNLEYİCİ
+  // ============================================================================
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // 1. Sayfayı Klonla
     if (request.action === 'cloneCurrentPage') {
       (async () => {
         try {
@@ -652,6 +1115,7 @@ VIEWPORT    : ${viewport}
       return true;
     }
 
+    // 2. Klasik Linkleri Keşfet
     if (request.action === 'discoverLinks') {
       sendResponse({
         success: true,
@@ -661,6 +1125,42 @@ VIEWPORT    : ${viewport}
       return false;
     }
 
+    // 3. Akıllı SPA Navigasyon Öğelerini Keşfet
+    if (request.action === 'discoverSpaElements') {
+      try {
+        const result = discoverSpaNavigationElements();
+        sendResponse({ success: true, ...result, currentUrl: window.location.href });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return false;
+    }
+
+    // 4. Güvenli SPA Tıklaması Gerçekleştir
+    if (request.action === 'performSafeClick') {
+      (async () => {
+        try {
+          const result = await performSafeNavigationClick(request.navId);
+          sendResponse(result);
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+    }
+
+    // 5. O Anki DOM Parmak İzini Al
+    if (request.action === 'getDomFingerprint') {
+      try {
+        const fp = computeDomFingerprint();
+        sendResponse({ success: true, fingerprint: fp, url: window.location.href, title: document.title });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return false;
+    }
+
+    // 6. Hızlı Sayfa İstatistikleri
     if (request.action === 'getPageQuickStats') {
       sendResponse({
         success: true,

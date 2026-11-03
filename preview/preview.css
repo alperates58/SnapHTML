@@ -444,3 +444,15 @@ body {
   color: #93c5fd;
   white-space: pre-wrap;
 }
+
+/* Mobil 390px Cihaz Çerçevesi */
+.iframe-container.mobile-frame-view {
+  max-width: 390px;
+  height: 844px;
+  max-height: calc(100vh - 100px);
+  border-radius: 46px;
+  border: 12px solid #1e293b;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px #334155;
+  background: #000;
+  position: relative;
+}

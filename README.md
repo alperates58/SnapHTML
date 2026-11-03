@@ -1,41 +1,88 @@
-# SnapHTML — Multi-Level Web Cloner & AI Mirror 🌐✨
+# SnapHTML V2 — Mobile Capture & Intelligent SPA Crawler 🌐✨
 
-**SnapHTML**, açık olan herhangi bir web sayfasını veya tüm web projenizi (`localhost`, React/Next.js panelleri vb.) tek tıkla; **tüm CSS stilleri, fontları, görselleri, anlık DOM durumunu ve AI metadata'sını** içine gömerek **tek parça bağımsız `.html`** veya **birbirine bağlı çok sayfalı bir `.zip` web sitesi paketi** olarak klonlayan yeni nesil bir Chrome Eklentisidir (Manifest V3).
+**SnapHTML V2**, web sayfalarını ve tek sayfalı (SPA) modern web uygulamalarını (`localhost`, React, Vue, Next.js, Angular vb.) tek tıkla; **tüm CSS stilleri, fontları, görselleri, anlık DOM durumunu ve AI metadata'sını** koruyarak **gerçek masaüstü ve mobil (390×844) viewport'larıyla** klonlayan yeni nesil bir Chrome Eklentisidir (Manifest V3).
 
----
-
-## 🎯 Seviyeler ve Derinlik (Crawl Depth Levels)
-
-SnapHTML, tek bir sayfanın ötesine geçerek tüm sekmeleri ve alt sayfaları zincirleme klonlayabilir:
-
-### 🔘 Seviye 0: Tek Sayfa (Instant Standalone HTML)
-- Sadece ekranda açık olan aktif sayfayı dondurur.
-- Çıktı: Tek bir `sayfa.html` dosyası. İnternetsiz veya sunucusuz çift tıklandığında projenin aynısı açılır.
-
-### 🔘 Seviye 1: Sekmeler ve Menü Bağlantıları (Multi-Page ZIP)
-- Sayfanın üst menüsündeki tüm sekmeleri (örn: **Genel Bakış**, **Kişilik DNA**, **Psikolojik Rapor**, **11 Boyut** vb.) ve iç linkleri otomatik keşfeder.
-- Her bir sekmeyi arka planda açıp stilleri ve görselleriyle klonlar.
-- **Yerel Link Dönüştürme:** Sayfalardaki `href="/kisilik-dna"` linklerini yerel `href="./kisilik_dna.html"` dosyalarına bağlar.
-- Çıktı: `index.html`'i açtığınızda üstteki sekmelere tıkladıkça sayfalar arası gerçekten geçiş yapabileceğiniz tam bir **`.zip` Web Sitesi Paketi**.
-
-### 🔘 Seviye 2: Kapsamlı Derinlik (Recursive Crawl)
-- Seviye 1'deki sayfaların da kendi içindeki alt bağlantıları (detay sayfaları, alt kategoriler) zincirleme olarak tarar.
-- Çok sayfalı web portallarını, dokümantasyon sitelerini veya büyük dashboard'ları tek seferde yerel bir arşive dönüştürür.
+Playwright veya harici bir tarayıcı otomasyon aracına ihtiyaç duymadan, doğrudan Chrome'un kendi mimarisi (`chrome.debugger` CDP) üzerinden çalışır.
 
 ---
 
-## 🤖 AI Proje Röntgeni (`project_ai.md`)
+## 🚀 V2 ile Gelen Yenilikler
 
-Çok sayfalı klonlama yapıldığında, ZIP paketinin içine otomatik olarak bir **`project_ai.md`** dosyası eklenir. Bu dosya şunları içerir:
-- Tüm sayfaların hiyerarşik site haritası
-- Her sayfanın DOM elemanı, buton, girdi ve form istatistikleri
-- Kullanılan renk paleti ve Framework tespiti (Tailwind, React, Next.js, Bootstrap)
+### 1. 📱 Gerçek Mobil Viewport ve Çift Görünüm (Desktop + Mobile)
+- **Masaüstü (1440×900)**, **Mobil (390×844 iPhone)**, **Tablet (768×1024 iPad)** veya **Dual View (Desktop + Mobile)**.
+- `chrome.debugger` üzerinden `Emulation.setDeviceMetricsOverride` ve `setUserAgentOverride` ile gerçek ekran boyutları ve CSS media query hesaplamaları uygulanır.
+- Geçici emülasyon capture sonrasında kesinlikle temizlenir.
+- Orijinal sekmenin düzeni bozulmaz; tarama işlemi izole bir geçici sekmede yürütülür.
 
-> **Kullanım:** ZIP'i açıp klasörü **Cursor**, **Antigravity** veya **Claude Projects** içerisine sürükleyin. AI artık sadece bir ekranı değil, **tüm yazılım projenizi** bir bütün olarak anlayıp geliştirebilir!
+### 2. 🛡️ True Mobile HTML Export & Standalone Responsive Containment
+- Mobil görünümde yakalanan HTML masaüstünde doğrudan çift tıklandığında masaüstü düzenine dönüşmez.
+- Bağımsız açılışlarda dahili 390px mobil cihaz çerçevesi ile açılır ve medya sorgularını mobil sınırlar içinde tutar.
+- SnapHTML Viewer ve ZIP içindeki `index.html` portalında otomatik 390px telefon çerçevesi sunulur.
+
+### 3. 🧭 Akıllı SPA State Keşif Motoru (Zero-URL-Change SPAs)
+- React, Vue ve Angular gibi URL değiştirmeyen arayüzlerde:
+  - Sidebar navigasyonu
+  - Üst menü sekmeleri
+  - Tab barlar (`role="tab"`, `aria-controls`, `data-state`)
+  - Mobil alt gezinme çubuğu (Bottom Navigation)
+  - `data-testid` ve veri öznitelikleri
+- Her tıklama sonrası:
+  - **DOM Stabilizasyonu & MutationObserver**
+  - **Semantik İçerik Parmak İzi (DOM Fingerprint)**
+  - **Asenkron İçerik & Yükleme Spinner Kontrolleri**
+- URL değişmese bile içerik anlamlı şekilde değiştiğinde bağımsız mantıksal bir ekran kimliğiyle (`screen_chat`, `screen_editor`, `screen_git`, `screen_agents`, `screen_database`, `screen_deployments`, `screen_settings`) kaydedilir.
+
+### 4. 🔒 Güvenli Tarama (Safe Crawling Guarantee)
+- Tarayıcı yalnızca salt-okunur güvenli navigasyon işlemleri yapar.
+- Şunlar **asla** otomatik tıklanmaz:
+  - `Delete / Sil / Kaldır`
+  - `Save / Submit / Kaydet / Gönder`
+  - `Deploy / Yayınla / Dağıt`
+  - `Push / Commit / Migration`
+  - `Logout / Çıkış / Sign Out`
+  - `Payment / Satın Alma / Ödeme`
+  - `Form Gönderimi & Dosya Yükleme`
+
+### 5. 📦 Gelişmiş ZIP Paketi & İnteraktif Çevrimdışı Portal
+Paketlenen ZIP dosyasının yapısı:
+```text
+snapshots/
+  desktop/
+    01-home.html
+    02-chat.html
+    03-editor.html
+    04-git.html
+    05-agents.html
+    06-database.html
+    07-deployments.html
+    08-settings.html
+  mobile/
+    01-home.html
+    02-chat.html
+    03-editor.html
+    04-git.html
+    05-agents.html
+    06-database.html
+    07-deployments.html
+    08-settings.html
+screenshots/
+  desktop/
+    01-home.png
+    02-chat.png ...
+  mobile/
+    01-home.png
+    02-chat.png ...
+manifest.json
+project_ai.md
+index.html
+```
+
+- **`index.html`**: Çevrimdışı çalışan interaktif portal. Sol menüden ekranlar seçilebilir; Masaüstü, Mobil veya **"Screenshot Karşılaştır"** split-view modu ile yakalanan HTML ve gerçek ekran görüntüsü piksel piksel yan yana kıyaslanabilir!
+- **`manifest.json`**: Original URL, Logical Screen ID, Title, Viewport, DOM Fingerprint, Zaman Damgası ve Atlanan Güvenlik Öğelerini eksiksiz içerir.
 
 ---
 
-## 🚀 Chrome'a Nasıl Kurulur? (30 Saniye)
+## 🛠️ Chrome'a Kurulum (30 Saniye)
 
 1. Google Chrome adres çubuğuna şunu yazıp Enter'a basın:
    ```text
@@ -48,45 +95,38 @@ SnapHTML, tek bir sayfanın ötesine geçerek tüm sekmeleri ve alt sayfaları z
 
 ---
 
-## 💡 Nasıl Kullanılır?
+## 💡 Kullanım
 
-1. Klonlamak istediğiniz web sayfasına gidin (örn. `http://localhost:3000/dashboard`).
+1. Hedef web uygulamasına gidin (örn. `https://dev.alperates.com.tr` veya `http://localhost:3000`).
 2. Chrome araç çubuğundaki **SnapHTML** ikonuna tıklayın.
-3. **Klonlama Derinliğini Seçin**:
-   - `0`: Yalnızca aktif sayfa (.html)
-   - `1`: Aktif sayfadaki menü & sekmeler (.zip)
-   - `2`: Tüm alt sayfalar (.zip)
-4. (İsteğe bağlı) **"Listeyi Gör"** butonuna basarak taranmasını istemediğiniz linklerin işaretini kaldırabilirsiniz.
-5. **Klonla & İndir** butonuna basın. Gerisini SnapHTML halleder!
+3. **Görünüm Seçin:** `Desktop`, `Mobile` veya `Dual View (Desktop + Mobile)`.
+4. **Tarama Modu Seçin:** `Akıllı SPA` (Önerilen) veya `Tek Ekran`.
+5. **"Tüm Siteyi Tara (Desktop + Mobile) [.zip]"** butonuna tıklayın.
+6. İndirilen ZIP dosyasını açıp içindeki `index.html` üzerinden projenizi çevrimdışı inceleyin!
 
 ---
 
-## 📁 Proje Dosya Yapısı
+## 📁 Proje Dosya Mimarisi
 
 ```text
 SnapHTML/
-├── manifest.json              # Chrome Manifest V3 yapılandırması & universal host permissions
-├── background.js              # Recursive Crawl Engine, Universal CORS bypass, Link Rewriter & ZIP Manager
-├── content-script.js          # DOM serialization, Canvas-to-PNG, Declarative Shadow DOM, Link Discovery
-├── icons/                     # 16, 32, 48, 128 PNG ikonları
-│   ├── icon16.png
-│   ├── icon32.png
-│   ├── icon48.png
-│   └── icon128.png
+├── manifest.json              # Chrome MV3, debugger, tabs, storage izinleri
+├── background.js              # Service Worker, CDP köprüsü, ZIP yöneticisi
+├── content-script.js          # SPA Keşif Motoru, Fingerprinting, Güvenli Navigasyon, DOM Klonlama
 ├── lib/
-│   ├── storage.js             # IndexedDB motoru: Büyük boyutlu snapshot'lar için kotasız depolama
-│   └── zip.js                 # Sıfır bağımlılıklı pure-JS ZIP arşivleme kütüphanesi
+│   ├── viewport.js            # CDP Emulation (Device metrics, UA, Touch, Screenshot)
+│   ├── spa-crawler.js         # Master SPA Keşif & Çift Viewport Koordinatörü
+│   ├── zip-export.js          # manifest.json ve interaktif index.html portal üreticisi
+│   ├── zip.js                 # Sıfır bağımlılıklı pure-JS ZIP yazıcı
+│   └── storage.js             # IndexedDB motoru
 ├── popup/
-│   ├── popup.html             # Derinlik seçicili dark-glassmorphism açılır menü
-│   ├── popup.css              # Segmented control ve modern UI stilleri
-│   └── popup.js               # Derinlik yönetimi, link filtreleme ve tarama tetikleyicisi
+│   ├── popup.html             # Viewport & SPA modlu popup arayüzü
+│   ├── popup.css              # Dark glassmorphism stilleri
+│   └── popup.js               # Popup kontrolörü & canlı ilerleme göstergesi
 ├── preview/
-│   ├── preview.html           # Çoklu cihaz (Desktop/Tablet/Mobile) önizleme çalışma alanı
-│   ├── preview.css            # Workspace stilleri
-│   └── preview.js             # Canlı iframe render & AI prompt motoru
-├── store-assets/              # Chrome Web Store için 1280x800 ekran görüntüleri ve tanıtım banner'ları
-├── STORE_LISTING.md           # Mağaza başlıkları, açıklamaları ve izin gerekçeleri kılavuzu
-├── PRIVACY_POLICY.md          # Google CWS uyumlu resmi Gizlilik Politikası
-├── SnapHTML_v1.0.1_ChromeWebStore.zip # Mağazaya doğrudan yüklenecek temiz üretim paketi
-└── README.md                  # Proje dokümantasyonu
+│   ├── preview.html           # Çoklu cihaz (390px mobil çerçeveli) önizleme alanı
+│   ├── preview.css            # Preview çalışma alanı stilleri
+│   └── preview.js             # Canlı iframe ve mobil çerçeve kontrolü
+└── scripts/
+    └── pack_extension.js      # Chrome Web Store üretim paketi derleyici
 ```

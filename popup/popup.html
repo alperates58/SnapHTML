@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SnapHTML</title>
+  <title>SnapHTML V2</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -19,10 +19,10 @@
         </div>
         <div class="brand-text">
           <h1 class="brand-name">SnapHTML</h1>
-          <span class="brand-badge">Multi-Level AI</span>
+          <span class="brand-badge">SPA & Mobile V2</span>
         </div>
       </div>
-      <span class="version-tag">v1.0.1</span>
+      <span class="version-tag">v2.0.0</span>
     </header>
 
     <!-- Aktif Sayfa Kartı -->
@@ -37,84 +37,123 @@
           <span class="metric-val" id="metricNodes">...</span>
         </div>
         <div class="metric-chip">
-          <span class="metric-label">İç Bağlantılar:</span>
-          <span class="metric-val" id="metricLinks">0 link</span>
+          <span class="metric-label">SPA Sekmeleri:</span>
+          <span class="metric-val" id="metricSpaLinks">0 menü</span>
         </div>
       </div>
     </div>
 
-    <!-- DERİNLİK / SEVİYE SEÇİCİ -->
+    <!-- GÖRÜNÜM (VIEWPORT) SEÇİCİ -->
+    <div class="viewport-section">
+      <div class="depth-title-row">
+        <span class="depth-label">Görünüm (Viewport)</span>
+        <span class="depth-desc" id="viewportDesc">Desktop + Mobile (Dual)</span>
+      </div>
+      <div class="viewport-selector">
+        <button class="vp-btn" data-vp="desktop" title="Masaüstü (1440×900)">
+          <span class="vp-icon">🖥️</span>
+          <span class="vp-lbl">Desktop</span>
+        </button>
+        <button class="vp-btn" data-vp="mobile" title="Mobil (390×844 iPhone)">
+          <span class="vp-icon">📱</span>
+          <span class="vp-lbl">Mobile</span>
+        </button>
+        <button class="vp-btn" data-vp="tablet" title="Tablet (768×1024 iPad)">
+          <span class="vp-icon">📟</span>
+          <span class="vp-lbl">Tablet</span>
+        </button>
+        <button class="vp-btn active" data-vp="both" title="Desktop + Mobile (Çift Görünüm)">
+          <span class="vp-icon">⚡</span>
+          <span class="vp-lbl">Dual View</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TARAMA & KEŞİF MODU -->
     <div class="depth-section">
       <div class="depth-title-row">
-        <span class="depth-label">Klonlama Derinliği</span>
-        <span class="depth-desc" id="depthDescription">Sadece aktif sayfa</span>
+        <span class="depth-label">Tarama Modu</span>
+        <span class="depth-desc" id="modeDescription">Akıllı SPA (Menü & Sekmeler)</span>
       </div>
 
-      <div class="depth-selector">
-        <button class="depth-btn active" data-depth="0">
-          <span class="d-num">0</span>
-          <span class="d-lbl">Tek Sayfa</span>
+      <div class="mode-selector">
+        <button class="mode-btn" data-mode="single">
+          <span class="m-title">Tek Ekran</span>
+          <span class="m-sub">Anlık Klon</span>
         </button>
-        <button class="depth-btn" data-depth="1">
-          <span class="d-num">1</span>
-          <span class="d-lbl">Sekmeler</span>
+        <button class="mode-btn active" data-mode="spa">
+          <span class="m-title">Akıllı SPA</span>
+          <span class="m-sub">Menü & Sekmeler</span>
         </button>
-        <button class="depth-btn" data-depth="2">
-          <span class="d-num">2</span>
-          <span class="d-lbl">Tam Site</span>
+        <button class="mode-btn" data-mode="classic">
+          <span class="m-title">Klasik Site</span>
+          <span class="m-sub">URL Derinliği</span>
         </button>
       </div>
 
-      <!-- Seviye 1/2 için Bağlantı Önizleme ve Sayfa Limiti -->
-      <div class="depth-details hidden" id="depthDetails">
+      <!-- SPA Modu için Keşfedilen Güvenli Menü & Sekme Listesi -->
+      <div class="depth-details" id="spaDetails">
         <div class="links-preview-box">
           <div class="links-preview-header">
-            <span>Keşfedilen Sekmeler / Linkler (<strong id="foundLinksCount">0</strong>)</span>
-            <button class="btn-text" id="btnToggleLinksList">Listeyi Gör</button>
+            <span>Keşfedilen Güvenli Menüler (<strong id="foundSpaCount">0</strong>)</span>
+            <button class="btn-text" id="btnToggleSpaList">Listeyi Gör</button>
           </div>
-          <div class="links-list hidden" id="linksList"></div>
+          <div class="links-list hidden" id="spaList"></div>
         </div>
 
         <div class="limit-row">
-          <span>Maksimum Sayfa Sınırı:</span>
-          <select id="maxPagesSelect" class="select-sm">
-            <option value="10">10 Sayfa</option>
-            <option value="25" selected>25 Sayfa</option>
-            <option value="50">50 Sayfa</option>
-            <option value="100">100 Sayfa</option>
+          <span>Maksimum Ekran Sayısı:</span>
+          <select id="maxScreensSelect" class="select-sm">
+            <option value="10">10 Ekran</option>
+            <option value="25" selected>25 Ekran</option>
+            <option value="50">50 Ekran</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Klasik Derinlik Seçenekleri (Gizli) -->
+      <div class="depth-details hidden" id="classicDetails">
+        <div class="limit-row">
+          <span>Tarama Derinliği:</span>
+          <select id="classicDepthSelect" class="select-sm">
+            <option value="1">Seviye 1 (İç Linkler)</option>
+            <option value="2" selected>Seviye 2 (Tüm Site)</option>
           </select>
         </div>
       </div>
     </div>
 
-    <!-- İlerleme Durumu -->
+    <!-- İlerleme Durumu & İptal -->
     <div class="progress-wrap hidden" id="progressWrap">
       <div class="progress-bar">
         <div class="progress-fill" id="progressFill"></div>
       </div>
-      <div class="progress-status" id="progressText">Hazırlanıyor...</div>
+      <div class="progress-info-row">
+        <div class="progress-status" id="progressText">Hazırlanıyor...</div>
+        <button class="btn-cancel" id="btnCancelCrawl" title="Taramayı Durdur">İptal</button>
+      </div>
     </div>
 
     <!-- Ana Aksiyon Butonları -->
     <div class="actions">
-      <!-- Seviye 0 Butonu: Tek Sayfa İndir -->
-      <button class="btn btn-primary" id="btnDownload">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        <span id="btnDownloadText">Sayfayı Klonla & İndir (.html)</span>
-      </button>
-
-      <!-- Seviye 1 & 2 Butonu: Çok Sayfalı ZIP Paketi -->
-      <button class="btn btn-emerald hidden" id="btnCrawlDownload">
+      <!-- SPA Modu Butonu: Tek tıkla Desktop + Mobile ZIP -->
+      <button class="btn btn-emerald" id="btnSpaCrawl">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
           <line x1="12" y1="22.08" x2="12" y2="12"></line>
         </svg>
-        <span id="btnCrawlText">Tüm Seviyeleri Klonla & Paketle (.zip)</span>
+        <span id="btnSpaCrawlText">Tüm Siteyi Tara (Desktop + Mobile) [.zip]</span>
+      </button>
+
+      <!-- Tek Sayfa İndir Butonu -->
+      <button class="btn btn-primary hidden" id="btnDownload">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span id="btnDownloadText">Ekranı Klonla & İndir (.html)</span>
       </button>
 
       <!-- Önizleme Sekmesi -->

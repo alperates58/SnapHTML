@@ -1,7 +1,7 @@
 /**
- * SnapHTML - Preview Workspace Controller
+ * SnapHTML - Preview Workspace Controller V2
  * IndexedDB'den snapshot'ı çeker, iframe içinde canlı render eder,
- * AI röntgeni ve kaynak kod görünümlerini yönetir.
+ * 390px mobil çerçeve simülasyonu, AI röntgeni ve kaynak kod görünümlerini yönetir.
  */
 
 import { getSnapshot } from '../lib/storage.js';
@@ -69,6 +69,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2. Canlı Iframe Render Et
   previewFrame.srcdoc = record.html;
 
+  // Mobil Viewport Kontrolü: Otomatik 390px mobil çerçeve uygula
+  const isMobileRecord = record.metadata?.viewportDetails?.mode === 'mobile' ||
+    (record.metadata?.viewport && record.metadata.viewport.toLowerCase().includes('mobile')) ||
+    (record.metadata?.viewport && record.metadata.viewport.includes('390'));
+
+  if (isMobileRecord) {
+    devButtons.forEach(b => {
+      b.classList.toggle('active', b.dataset.width === '390px');
+    });
+    iframeContainer.style.maxWidth = '390px';
+    iframeContainer.classList.add('mobile-frame-view');
+  }
+
   // 3. AI Röntgeni Verilerini Doldur
   const meta = record.metadata || {};
   const stats = meta.domStats || {};
@@ -98,35 +111,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   `;
 
   // Framework Etiketleri
-  if (meta.frameworks && meta.frameworks.length > 0) {
-    tagsList.innerHTML = meta.frameworks.map(f => `<span class="framework-tag">${f}</span>`).join('');
-  } else {
-    tagsList.innerHTML = '<span class="meta-pill">Standart Web</span>';
-  }
+  const fwList = meta.frameworks || ['Standart Web'];
+  tagsList.innerHTML = fwList.map(f => `<span class="tag-pill">${f}</span>`).join('');
 
-  // AI Prompt Şablonu
-  const generatedAiPrompt = `# Sayfa İnceleme ve İyileştirme Promptu
-**Başlık:** ${record.title || 'Web Sayfası'}
-**Kaynak URL:** ${record.url}
-**Yakalanma:** ${meta.timestamp || new Date().toISOString()}
-**Viewport:** ${meta.viewport || '1920x1080'}
+  // AI Promptu
+  const headings = stats.headings || {};
+  const promptTemplate = `# 🤖 SnapHTML Web Klon Röntgeni
 
-## 🎯 Sayfa Yapısı:
-- ${stats.navbars || 0} Menü / Navigasyon
-- ${stats.mainContainers || 0} Ana Konteyner
-- ${stats.forms || 0} Form (${stats.inputs || 0} input/select)
-- ${stats.buttons || 0} Etkileşimli Buton
-- Kullanılan Kütüphaneler: ${meta.frameworks?.join(', ') || 'Standart Web'}
+## 📌 Sayfa Bilgileri:
+- **Kaynak URL:** ${record.url}
+- **Başlık:** ${record.title}
+- **Tarih:** ${record.timestamp}
+- **Viewport:** ${meta.viewport || 'N/A'}
 
-## 🎨 Stil & Renkler:
-- Sayfa Arka Planı: ${bg}
-- Metin Rengi: ${textColor}
+## 🎯 Semantik Mimari:
+- **Navigasyon Menüleri:** ${stats.navbars || 0} adet
+- **Ana Taşıyıcılar:** ${stats.mainContainers || 0} adet
+- **Formlar:** ${stats.forms || 0} adet (${stats.inputs || 0} girdi alanı)
+- **Butonlar:** ${stats.buttons || 0} adet
+- **Tablolar:** ${stats.tables || 0} adet
+- **Başlık Hiyerarşisi:** H1: ${headings.h1 || 0} | H2: ${headings.h2 || 0} | H3: ${headings.h3 || 0}
+- **Tespit Edilen Kütüphaneler:** ${fwList.join(', ')}
 
-## 🤖 Görev / Talimat:
-Bu sayfanın çalışan, bağımsız ve stilleri gömülü tek parça HTML kopyası elimde.
-Lütfen bu sayfayı analiz ederek tasarım, kullanıcı deneyimi (UX) ve kod yapısını incele.
+## 🎨 Renk Paleti:
+- **Gövde Arka Planı:** ${bg}
+- **Metin Rengi:** ${textColor}
+
+## 💡 AI Asistanına Talimat:
+Aşağıdaki canlı HTML kodunu referans alarak:
+1. Tasarımı ve bileşen hiyerarşisini incele.
+2. Tüm etkileşimli buton ve form alanlarının state davranışlarını modelle.
+3. Bu arayüzü modern React + Tailwind CSS bileşenlerine dönüştür.
 `;
-  promptText.textContent = generatedAiPrompt;
+
+  promptText.value = promptTemplate;
 
   // 4. Kaynak Kod Sekmesi
   rawHtmlCode.textContent = record.html;
@@ -159,7 +177,14 @@ Lütfen bu sayfayı analiz ederek tasarım, kullanıcı deneyimi (UX) ve kod yap
     btn.addEventListener('click', () => {
       devButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      iframeContainer.style.maxWidth = btn.dataset.width;
+      const w = btn.dataset.width;
+      iframeContainer.style.maxWidth = w;
+
+      if (w === '390px') {
+        iframeContainer.classList.add('mobile-frame-view');
+      } else {
+        iframeContainer.classList.remove('mobile-frame-view');
+      }
     });
   });
 
@@ -178,26 +203,25 @@ Lütfen bu sayfayı analiz ederek tasarım, kullanıcı deneyimi (UX) ve kod yap
   }
 
   // 7. Aksiyonlar
+  btnCopyAiPrompt.addEventListener('click', () => {
+    copyWithFeedback(promptTemplate, btnCopyAiPrompt, 'Prompt Kopyalandı!');
+  });
+
+  btnCopyPromptInline.addEventListener('click', () => {
+    copyWithFeedback(promptTemplate, btnCopyPromptInline, 'Kopyalandı!');
+  });
+
   btnCopyHtml.addEventListener('click', () => {
-    copyWithFeedback(record.html, btnCopyHtml, 'Kopyalandı!');
+    copyWithFeedback(record.html, btnCopyHtml, 'HTML Kopyalandı!');
   });
 
   btnCopyCodeInline.addEventListener('click', () => {
     copyWithFeedback(record.html, btnCopyCodeInline, 'Kopyalandı!');
   });
 
-  btnCopyAiPrompt.addEventListener('click', () => {
-    const fullText = generatedAiPrompt + '\n\n```html\n' + record.html + '\n```';
-    copyWithFeedback(fullText, btnCopyAiPrompt, 'AI Promptu Kopyalandı!');
-  });
-
-  btnCopyPromptInline.addEventListener('click', () => {
-    copyWithFeedback(generatedAiPrompt, btnCopyPromptInline, 'Kopyalandı!');
-  });
-
   btnDownload.addEventListener('click', () => {
-    let cleanTitle = (record.title || 'snapshot').slice(0, 30).replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ_-]/g, '_');
-    const filename = `${metaDomain.textContent}_${cleanTitle}_${Date.now()}.html`;
+    const cleanHost = metaDomain.textContent.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filename = `${cleanHost}_snapshot_${Date.now()}.html`;
 
     chrome.runtime.sendMessage({
       action: 'downloadHTML',
@@ -205,9 +229,17 @@ Lütfen bu sayfayı analiz ederek tasarım, kullanıcı deneyimi (UX) ve kod yap
       filename: filename
     }, (res) => {
       if (res && res.success) {
-        const origText = btnDownload.innerHTML;
-        btnDownload.innerHTML = '<span>✓ İndirildi</span>';
-        setTimeout(() => btnDownload.innerHTML = origText, 1500);
+        btnDownload.innerHTML = '<span>✓ İndirildi!</span>';
+        setTimeout(() => {
+          btnDownload.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>HTML İndir</span>
+          `;
+        }, 2000);
       }
     });
   });

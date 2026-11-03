@@ -1,7 +1,6 @@
 /**
- * SnapHTML - Popup Controller (Multi-Level Depth Edition)
- * Seviye 0 (Tek Sayfa), Seviye 1 (Sekmeler/Menüler) ve Seviye 2 (Tüm Site)
- * klonlama süreçlerini yönetir.
+ * SnapHTML V2 - Popup Controller
+ * Dual-Viewport (Desktop + Mobile) ve Akıllı SPA State Discovery Motoru
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -9,22 +8,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tabDomain = document.getElementById('tabDomain');
   const tabTitle = document.getElementById('tabTitle');
   const metricNodes = document.getElementById('metricNodes');
-  const metricLinks = document.getElementById('metricLinks');
+  const metricSpaLinks = document.getElementById('metricSpaLinks');
 
-  const depthButtons = document.querySelectorAll('.depth-btn');
-  const depthDescription = document.getElementById('depthDescription');
-  const depthDetails = document.getElementById('depthDetails');
-  const foundLinksCount = document.getElementById('foundLinksCount');
-  const btnToggleLinksList = document.getElementById('btnToggleLinksList');
-  const linksList = document.getElementById('linksList');
-  const maxPagesSelect = document.getElementById('maxPagesSelect');
+  const vpButtons = document.querySelectorAll('.vp-btn');
+  const viewportDesc = document.getElementById('viewportDesc');
+
+  const modeButtons = document.querySelectorAll('.mode-btn');
+  const modeDescription = document.getElementById('modeDescription');
+  const spaDetails = document.getElementById('spaDetails');
+  const classicDetails = document.getElementById('classicDetails');
+  const foundSpaCount = document.getElementById('foundSpaCount');
+  const btnToggleSpaList = document.getElementById('btnToggleSpaList');
+  const spaList = document.getElementById('spaList');
+  const maxScreensSelect = document.getElementById('maxScreensSelect');
+  const classicDepthSelect = document.getElementById('classicDepthSelect');
 
   const progressWrap = document.getElementById('progressWrap');
   const progressText = document.getElementById('progressText');
   const progressFill = document.getElementById('progressFill');
+  const btnCancelCrawl = document.getElementById('btnCancelCrawl');
 
+  const btnSpaCrawl = document.getElementById('btnSpaCrawl');
+  const btnSpaCrawlText = document.getElementById('btnSpaCrawlText');
   const btnDownload = document.getElementById('btnDownload');
-  const btnCrawlDownload = document.getElementById('btnCrawlDownload');
+  const btnDownloadText = document.getElementById('btnDownloadText');
   const btnPreview = document.getElementById('btnPreview');
   const btnCopyAi = document.getElementById('btnCopyAi');
 
@@ -39,11 +46,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const optAi = document.getElementById('optAi');
 
   let currentTab = null;
-  let currentDepth = 0; // 0, 1, 2
-  let discoveredLinks = [];
+  let selectedViewport = 'both'; // 'desktop', 'mobile', 'tablet', 'both'
+  let selectedMode = 'spa'; // 'single', 'spa', 'classic'
+  let discoveredCandidates = [];
 
   // 1. Ayarları storage'dan yükle
-  chrome.storage.local.get(['snaphtml_options', 'snaphtml_depth'], (result) => {
+  chrome.storage.local.get(['snaphtml_options', 'snaphtml_vp', 'snaphtml_mode'], (result) => {
     if (result && result.snaphtml_options) {
       const o = result.snaphtml_options;
       if (typeof o.inlineImages === 'boolean') optImages.checked = o.inlineImages;
@@ -53,8 +61,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof o.triggerScroll === 'boolean') optScroll.checked = o.triggerScroll;
       if (typeof o.addAiHeader === 'boolean') optAi.checked = o.addAiHeader;
     }
-    if (result && typeof result.snaphtml_depth === 'number') {
-      setDepth(result.snaphtml_depth);
+    if (result && result.snaphtml_vp) {
+      setViewport(result.snaphtml_vp);
+    }
+    if (result && result.snaphtml_mode) {
+      setMode(result.snaphtml_mode);
     }
   });
 
@@ -87,7 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabDomain.textContent = 'Desteklenmeyen Sekme';
     tabTitle.textContent = 'Chrome dahili sayfaları klonlanamaz.';
     btnDownload.disabled = true;
-    btnCrawlDownload.disabled = true;
+    btnSpaCrawl.disabled = true;
     btnPreview.disabled = true;
     btnCopyAi.disabled = true;
     return;
@@ -108,7 +119,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const stats = await chrome.tabs.sendMessage(currentTab.id, { action: 'getPageQuickStats' });
       if (stats && stats.success) {
         metricNodes.textContent = stats.nodeCount;
-        metricLinks.textContent = `${stats.internalLinksCount || 0} link`;
         return true;
       }
     } catch {
@@ -120,7 +130,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const statsRetry = await chrome.tabs.sendMessage(currentTab.id, { action: 'getPageQuickStats' });
         if (statsRetry && statsRetry.success) {
           metricNodes.textContent = statsRetry.nodeCount;
-          metricLinks.textContent = `${statsRetry.internalLinksCount || 0} link`;
         }
         return true;
       } catch (err) {
@@ -133,76 +142,123 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await ensureContentScript();
 
-  // Sayfadaki iç linkleri ve sekmeleri keşfet
-  async function loadDiscoveredLinks() {
+  // SPA Sekmelerini & Güvenli Menü Öğelerini Keşfet
+  async function loadSpaElements() {
     try {
-      const res = await chrome.tabs.sendMessage(currentTab.id, { action: 'discoverLinks' });
-      if (res && res.success && res.links) {
-        discoveredLinks = res.links;
-        foundLinksCount.textContent = discoveredLinks.length;
-        renderLinksList(discoveredLinks);
+      const res = await chrome.tabs.sendMessage(currentTab.id, { action: 'discoverSpaElements' });
+      if (res && res.success && res.candidates) {
+        discoveredCandidates = res.candidates;
+        foundSpaCount.textContent = discoveredCandidates.length;
+        metricSpaLinks.textContent = `${discoveredCandidates.length} menü`;
+        renderSpaList(discoveredCandidates);
       }
     } catch (err) {
-      console.warn('Link keşif hatası:', err);
+      console.warn('SPA keşif hatası:', err);
     }
   }
 
-  function renderLinksList(links) {
-    if (links.length === 0) {
-      linksList.innerHTML = '<span style="color: #94a3b8; padding: 4px;">İç bağlantı bulunamadı.</span>';
+  function renderSpaList(candidates) {
+    if (candidates.length === 0) {
+      spaList.innerHTML = '<span style="color: #94a3b8; padding: 4px;">Güvenli SPA menüsü tespit edilemedi.</span>';
       return;
     }
-    linksList.innerHTML = links.map((l, idx) => `
-      <label class="link-checkbox-item">
-        <input type="checkbox" checked value="${l.url}" data-index="${idx}">
-        <span title="${l.url}"><strong>${l.title}</strong> (${l.pathname})</span>
-      </label>
+    spaList.innerHTML = candidates.map((c, idx) => `
+      <div class="link-checkbox-item">
+        <span style="color: #38bdf8;">✓</span>
+        <span><strong>${c.label}</strong> <small style="color: #94a3b8;">(${c.logicalId})</small></span>
+      </div>
     `).join('');
   }
 
-  btnToggleLinksList.addEventListener('click', () => {
-    linksList.classList.toggle('hidden');
-    btnToggleLinksList.textContent = linksList.classList.contains('hidden') ? 'Listeyi Gör' : 'Listeyi Gizle';
+  btnToggleSpaList.addEventListener('click', () => {
+    spaList.classList.toggle('hidden');
+    btnToggleSpaList.textContent = spaList.classList.contains('hidden') ? 'Listeyi Gör' : 'Listeyi Gizle';
   });
 
-  await loadDiscoveredLinks();
+  await loadSpaElements();
 
-  // 3. DERİNLİK SEVİYESİ DEĞİŞTİRME
-  function setDepth(depth) {
-    currentDepth = depth;
-    chrome.storage.local.set({ snaphtml_depth: depth });
+  // 3. VIEWPORT SEÇİCİ
+  function setViewport(vp) {
+    selectedViewport = vp;
+    chrome.storage.local.set({ snaphtml_vp: vp });
 
-    depthButtons.forEach(btn => {
-      const d = parseInt(btn.dataset.depth, 10);
-      btn.classList.toggle('active', d === depth);
+    vpButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.vp === vp);
     });
 
-    if (depth === 0) {
-      depthDescription.textContent = 'Sadece aktif sayfa';
-      depthDetails.classList.add('hidden');
-      btnDownload.classList.remove('hidden');
-      btnCrawlDownload.classList.add('hidden');
-    } else if (depth === 1) {
-      depthDescription.textContent = 'Aktif sayfadaki menü & sekmeler';
-      depthDetails.classList.remove('hidden');
-      btnDownload.classList.add('hidden');
-      btnCrawlDownload.classList.remove('hidden');
-      document.getElementById('btnCrawlText').textContent = `Seviye 1: Sekmeleri Klonla (.zip)`;
-    } else if (depth === 2) {
-      depthDescription.textContent = 'Tüm alt sayfalar ve bağlantılar';
-      depthDetails.classList.remove('hidden');
-      btnDownload.classList.add('hidden');
-      btnCrawlDownload.classList.remove('hidden');
-      document.getElementById('btnCrawlText').textContent = `Seviye 2: Tüm Siteyi Klonla (.zip)`;
-    }
+    const labels = {
+      desktop: 'Masaüstü (1440×900)',
+      mobile: 'Mobil (390×844 iPhone)',
+      tablet: 'Tablet (768×1024 iPad)',
+      both: 'Desktop + Mobile (Dual View)'
+    };
+    viewportDesc.textContent = labels[vp] || 'Özel';
+    updateActionButtons();
   }
 
-  depthButtons.forEach(btn => {
+  vpButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const d = parseInt(btn.dataset.depth, 10);
-      setDepth(d);
+      setViewport(btn.dataset.vp);
     });
   });
+
+  // 4. TARAMA MODU SEÇİCİ
+  function setMode(mode) {
+    selectedMode = mode;
+    chrome.storage.local.set({ snaphtml_mode: mode });
+
+    modeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    if (mode === 'single') {
+      modeDescription.textContent = 'Sadece aktif ekran';
+      spaDetails.classList.add('hidden');
+      classicDetails.classList.add('hidden');
+      btnDownload.classList.remove('hidden');
+      btnSpaCrawl.classList.add('hidden');
+    } else if (mode === 'spa') {
+      modeDescription.textContent = 'Akıllı SPA (Menü & Sekmeler)';
+      spaDetails.classList.remove('hidden');
+      classicDetails.classList.add('hidden');
+      btnDownload.classList.add('hidden');
+      btnSpaCrawl.classList.remove('hidden');
+    } else if (mode === 'classic') {
+      modeDescription.textContent = 'Klasik URL Derinliği';
+      spaDetails.classList.add('hidden');
+      classicDetails.classList.remove('hidden');
+      btnDownload.classList.add('hidden');
+      btnSpaCrawl.classList.remove('hidden');
+    }
+
+    updateActionButtons();
+  }
+
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setMode(btn.dataset.mode);
+    });
+  });
+
+  function updateActionButtons() {
+    if (selectedMode === 'spa') {
+      if (selectedViewport === 'both') {
+        btnSpaCrawlText.textContent = 'Tüm Siteyi Tara (Desktop + Mobile) [.zip]';
+      } else if (selectedViewport === 'mobile') {
+        btnSpaCrawlText.textContent = 'Tüm Ekranları Tara (Mobil 390px) [.zip]';
+      } else {
+        btnSpaCrawlText.textContent = 'Tüm Ekranları Tara (Masaüstü) [.zip]';
+      }
+    } else if (selectedMode === 'single') {
+      if (selectedViewport === 'mobile') {
+        btnDownloadText.textContent = 'Mobil Ekranı Klonla (390px) [.html]';
+      } else {
+        btnDownloadText.textContent = 'Ekranı Klonla & İndir [.html]';
+      }
+    } else if (selectedMode === 'classic') {
+      btnSpaCrawlText.textContent = 'Klasik Siteyi Paketle [.zip]';
+    }
+  }
 
   // İlerleme mesajlarını dinle
   chrome.runtime.onMessage.addListener((msg) => {
@@ -218,10 +274,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setBusy(busy, text = '') {
     btnDownload.disabled = busy;
-    btnCrawlDownload.disabled = busy;
+    btnSpaCrawl.disabled = busy;
     btnPreview.disabled = busy;
     btnCopyAi.disabled = busy;
-    depthButtons.forEach(b => b.disabled = busy);
+    vpButtons.forEach(b => b.disabled = busy);
+    modeButtons.forEach(b => b.disabled = busy);
 
     if (busy) {
       progressWrap.classList.remove('hidden');
@@ -232,7 +289,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // 4. AKSİYON: SEVİYE 0 (Tek Sayfa HTML İndir)
+  // İptal Butonu
+  btnCancelCrawl.addEventListener('click', async () => {
+    progressText.textContent = 'Durduruluyor...';
+    try {
+      await chrome.runtime.sendMessage({ action: 'cancelCrawl' });
+    } catch {}
+  });
+
+  // 5. AKSİYON: SPA MODU V2 VEYA KLASİK TARAMA
+  btnSpaCrawl.addEventListener('click', async () => {
+    const ready = await ensureContentScript();
+    if (!ready) return;
+
+    const opts = saveCurrentOptions();
+
+    if (selectedMode === 'spa') {
+      const maxScreens = parseInt(maxScreensSelect.value, 10) || 25;
+      setBusy(true, 'Akıllı SPA taraması başlatılıyor...');
+
+      try {
+        const result = await chrome.runtime.sendMessage({
+          action: 'startSpaCrawl',
+          startUrl: currentTab.url,
+          startTabId: currentTab.id,
+          mode: selectedViewport,
+          maxScreens: maxScreens,
+          options: opts
+        });
+
+        if (result && result.success) {
+          progressText.textContent = `✓ ${result.count} Ekran Başarıyla İndirildi!`;
+          setTimeout(() => window.close(), 1800);
+        } else {
+          throw new Error(result?.error || 'Tarama tamamlanamadı.');
+        }
+      } catch (err) {
+        alert('Hata: ' + err.message);
+        setBusy(false);
+      }
+    } else {
+      // Klasik Seviye 1/2
+      const targetDepth = parseInt(classicDepthSelect.value, 10) || 2;
+      setBusy(true, `Seviye ${targetDepth} klasik taraması başlatılıyor...`);
+
+      try {
+        const result = await chrome.runtime.sendMessage({
+          action: 'startCrawl',
+          startUrl: currentTab.url,
+          startTabId: currentTab.id,
+          targetDepth: targetDepth,
+          maxPages: 30,
+          options: opts
+        });
+
+        if (result && result.success) {
+          progressText.textContent = `✓ ${result.count} Sayfa Paketlendi ve İndirildi!`;
+          setTimeout(() => window.close(), 1800);
+        } else {
+          throw new Error(result?.error || 'Tarama tamamlanamadı.');
+        }
+      } catch (err) {
+        alert('Hata: ' + err.message);
+        setBusy(false);
+      }
+    }
+  });
+
+  // 6. AKSİYON: TEK SAYFA HTML İNDİR (Viewport Duyarlı)
   btnDownload.addEventListener('click', async () => {
     const ready = await ensureContentScript();
     if (!ready) return;
@@ -241,16 +365,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     const opts = saveCurrentOptions();
 
     try {
-      const response = await chrome.tabs.sendMessage(currentTab.id, {
-        action: 'cloneCurrentPage',
-        options: opts
-      });
+      let response = null;
+
+      if (selectedViewport === 'mobile' || selectedViewport === 'tablet') {
+        progressText.textContent = `${selectedViewport} görünümü emüle ediliyor...`;
+        response = await chrome.runtime.sendMessage({
+          action: 'captureViewportSnapshot',
+          tabId: currentTab.id,
+          viewport: selectedViewport,
+          options: opts
+        });
+      } else {
+        response = await chrome.tabs.sendMessage(currentTab.id, {
+          action: 'cloneCurrentPage',
+          options: {
+            ...opts,
+            viewport: { width: 1440, height: 900, dpr: 1, mode: 'desktop' }
+          }
+        });
+      }
 
       if (!response || !response.success) throw new Error(response?.error || 'Klonlama başarısız.');
 
       progressText.textContent = 'HTML dosyası indiriliyor...';
       const cleanHost = tabDomain.textContent.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filename = `${cleanHost}_${Date.now()}.html`;
+      const suffix = selectedViewport === 'mobile' ? '_mobile' : '';
+      const filename = `${cleanHost}${suffix}_${Date.now()}.html`;
 
       const dlRes = await chrome.runtime.sendMessage({
         action: 'downloadHTML',
@@ -270,50 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 5. AKSİYON: SEVİYE 1 & 2 (Çok Seviyeli Crawl & ZIP Paketleme)
-  btnCrawlDownload.addEventListener('click', async () => {
-    const ready = await ensureContentScript();
-    if (!ready) return;
-
-    const maxPages = parseInt(maxPagesSelect.value, 10) || 25;
-    const opts = saveCurrentOptions();
-
-    // Kullanıcının listeden seçtiği linkleri belirle
-    let selectedUrls = null;
-    const checkedInputs = linksList.querySelectorAll('input[type="checkbox"]:checked');
-    if (checkedInputs.length > 0 && checkedInputs.length < discoveredLinks.length) {
-      selectedUrls = Array.from(checkedInputs).map(inp => {
-        const idx = parseInt(inp.dataset.index, 10);
-        return discoveredLinks[idx];
-      }).filter(Boolean);
-    }
-
-    setBusy(true, `Seviye ${currentDepth} taraması başlatılıyor...`);
-
-    try {
-      const result = await chrome.runtime.sendMessage({
-        action: 'startCrawl',
-        startUrl: currentTab.url,
-        startTabId: currentTab.id,
-        targetDepth: currentDepth,
-        maxPages: maxPages,
-        options: opts,
-        selectedUrls: selectedUrls
-      });
-
-      if (result && result.success) {
-        progressText.textContent = `✓ ${result.count} Sayfa Paketlendi ve İndirildi!`;
-        setTimeout(() => window.close(), 1800);
-      } else {
-        throw new Error(result?.error || 'Tarama tamamlanamadı.');
-      }
-    } catch (err) {
-      alert('Hata: ' + err.message);
-      setBusy(false);
-    }
-  });
-
-  // 6. AKSİYON: Önizleme Sekmesi
+  // 7. AKSİYON: ÖNİZLEME SEKMESİ
   btnPreview.addEventListener('click', async () => {
     const ready = await ensureContentScript();
     if (!ready) return;
@@ -324,7 +421,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const response = await chrome.tabs.sendMessage(currentTab.id, {
         action: 'cloneCurrentPage',
-        options: opts
+        options: {
+          ...opts,
+          isMobile: selectedViewport === 'mobile',
+          viewport: selectedViewport === 'mobile'
+            ? { width: 390, height: 844, dpr: 3, mode: 'mobile' }
+            : { width: 1440, height: 900, dpr: 1, mode: 'desktop' }
+        }
       });
 
       if (!response || !response.success) throw new Error(response?.error);
@@ -344,7 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 7. AKSİYON: AI Promptu Kopyala
+  // 8. AKSİYON: AI PROMPT KOPYALA
   btnCopyAi.addEventListener('click', async () => {
     const ready = await ensureContentScript();
     if (!ready) return;
@@ -371,7 +474,7 @@ Ekran / Viewport: ${meta.viewport || 'N/A'}
 - Ana Alanlar (Main): ${meta.domStats?.mainContainers || 0} adet
 - Formlar: ${meta.domStats?.forms || 0} adet (${meta.domStats?.inputs || 0} aktif girdi)
 - Butonlar: ${meta.domStats?.buttons || 0} adet
-- Tespit Edilen İç Bağlantılar: ${discoveredLinks.length} adet
+- Keşfedilen SPA Menüleri: ${discoveredCandidates.length} adet
 
 ## 💻 Canlı HTML Klonu:
 \`\`\`html

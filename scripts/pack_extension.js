@@ -4,7 +4,7 @@ const zlib = require('zlib');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'manifest.json'), 'utf8'));
-const version = manifest.version || '1.0.1';
+const version = manifest.version || '2.0.0';
 const OUTPUT_ZIP = path.join(ROOT_DIR, `SnapHTML_v${version}_ChromeWebStore.zip`);
 
 // Pakete dahil edilecek dosyalar ve klasörler
@@ -18,6 +18,9 @@ const INCLUDED_FILES = [
   'icons/icon128.png',
   'lib/storage.js',
   'lib/zip.js',
+  'lib/viewport.js',
+  'lib/spa-crawler.js',
+  'lib/zip-export.js',
   'popup/popup.html',
   'popup/popup.js',
   'popup/popup.css',

@@ -1,11 +1,14 @@
 /**
  * SnapHTML - Background Service Worker (Manifest V3)
- * Universal asset fetcher, çok seviyeli recursive tarayıcı (Crawl Depth Engine),
- * link rewriter ve ZIP paketleme yöneticisi.
+ * Universal asset fetcher, çok seviyeli recursive tarayıcı,
+ * Akıllı SPA State Discovery Engine, Çift Viewport (Desktop+Mobile) yöneticisi
+ * ve ZIP paketleme motoru.
  */
 
 import { saveSnapshot, cleanupOldSnapshots } from './lib/storage.js';
 import { SimpleZip } from './lib/zip.js';
+import { VIEWPORT_PRESETS, resolveViewport, applyViewportEmulation, clearViewportEmulation, captureTabScreenshot } from './lib/viewport.js';
+import { runSpaCrawlAndExport, cancelActiveCrawl } from './lib/spa-crawler.js';
 
 cleanupOldSnapshots();
 
@@ -14,7 +17,7 @@ cleanupOldSnapshots();
  */
 function bufferToBase64(buffer) {
   let binary = '';
-  const bytes = new Uint8Array(buffer);
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const len = bytes.byteLength;
   const chunkSize = 8192;
   for (let i = 0; i < len; i += chunkSize) {
@@ -119,7 +122,7 @@ Sayfalardaki tüm iç linkler (\`<a href="...">\`) yerel dosyalara (\`./kisilik_
 }
 
 /**
- * DERİNLİK MOTORU: Çok seviyeli tarama yapar, linkleri yerelleştirir ve ZIP üretir
+ * KLASİK DERİNLİK MOTORU: Çok seviyeli URL taraması (Geriye dönük uyumluluk)
  */
 async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages = 30, options = {}, selectedUrls = null }) {
   const visited = new Map();
@@ -129,7 +132,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
   const urlToFilename = new Map();
   urlToFilename.set(startNormalized, 'index.html');
 
-  // Başlangıç sayfasını ekle
   queue.push({
     url: startNormalized,
     depth: 0,
@@ -137,7 +139,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
     isInitialTab: true
   });
 
-  // Eğer kullanıcı popup'tan belirli sekmeleri/linkleri seçtiyse (Seviye 1)
   if (selectedUrls && selectedUrls.length > 0) {
     selectedUrls.forEach(u => {
       const norm = normalizeUrl(u.url);
@@ -174,23 +175,18 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
     sendProgress(`[${visited.size + 1}] Klonlanıyor: ${item.title || normUrl}...`);
 
     let cloneResult = null;
-
     const crawlOptions = { ...options, isCrawlPage: true };
 
     if (item.isInitialTab) {
-      // Aktif sekmeden al
       cloneResult = await chrome.tabs.sendMessage(startTabId, {
         action: 'cloneCurrentPage',
         options: crawlOptions
       });
     } else {
-      // Arka plan sekmesinde aç, bekle ve klonla
       let bgTab = null;
       try {
         bgTab = await chrome.tabs.create({ url: normUrl, active: false });
         await waitForTabReady(bgTab.id);
-        
-        // SPA hydration için bekleme
         await new Promise(r => setTimeout(r, 900));
 
         await chrome.scripting.executeScript({
@@ -231,7 +227,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
       depth: item.depth
     });
 
-    // Eğer manuel seçim yoksa ve derinlik devam ediyorsa yeni linkleri keşfet
     if (!selectedUrls && item.depth < targetDepth && visited.size < maxPages) {
       const discovered = cloneResult.discoveredLinks || [];
       for (const link of discovered) {
@@ -251,7 +246,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
     }
   }
 
-  // Yerel Link Dönüştürme
   sendProgress('Sayfa bağlantıları yerelleştiriliyor...');
   const zip = new SimpleZip();
   const pagesSummary = [];
@@ -280,7 +274,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
     });
   }
 
-  // AI Raporu ve Metadata Ekle
   const masterAiMarkdown = generateMasterAiReport(startUrl, visited, pagesSummary, targetDepth);
   zip.addFile('project_ai.md', masterAiMarkdown);
   zip.addFile('sitemap.json', JSON.stringify({
@@ -291,7 +284,6 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
     pages: pagesSummary
   }, null, 2));
 
-  // ZIP İndirme
   sendProgress('ZIP arşivi oluşturuluyor...');
   const zipBytes = zip.generate();
   const base64Zip = bufferToBase64(zipBytes);
@@ -308,6 +300,32 @@ async function crawlAndPackageSite({ startUrl, startTabId, targetDepth, maxPages
 
   sendProgress(`✓ ${visited.size} Sayfa Başarıyla İndirildi!`);
   return { success: true, count: visited.size, zipFilename };
+}
+
+/**
+ * Tek Sayfayı Belirli Bir Viewport ile Yakalama (CDP Emulation + Clean Cleanup)
+ */
+async function capturePageWithViewport(tabId, viewportPreset, options = {}) {
+  const vp = resolveViewport(viewportPreset);
+  try {
+    // 1. Viewport uygula
+    await applyViewportEmulation(tabId, vp);
+
+    // 2. Klonla
+    const cloneResult = await chrome.tabs.sendMessage(tabId, {
+      action: 'cloneCurrentPage',
+      options: {
+        ...options,
+        viewport: vp,
+        isMobile: Boolean(vp.mobile)
+      }
+    });
+
+    return cloneResult;
+  } finally {
+    // 3. Emülasyonu kesinlikle kaldır
+    await clearViewportEmulation(tabId);
+  }
 }
 
 // Mesaj dinleyici
@@ -333,7 +351,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // 2. Cross-Origin Asset (Görsel, Font vb.) Base64 Çevirici
+  // 2. Cross-Origin Asset Base64 Çevirici
   if (message.action === 'fetchAssetAsBase64') {
     (async () => {
       try {
@@ -418,7 +436,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // 5. DERİNLİKLİ TARAMA (Seviye 1, Seviye 2... ZIP Paketi)
+  // 5. Belirli Viewport ile Tek Sayfa Klonla (Desktop / Mobile)
+  if (message.action === 'captureViewportSnapshot') {
+    (async () => {
+      try {
+        const result = await capturePageWithViewport(message.tabId, message.viewport, message.options);
+        sendResponse(result);
+      } catch (err) {
+        console.error('[SnapHTML] Viewport capture hatası:', err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  // 6. AKILLI SPA EKRAN TARAMA MOTORU (Desktop + Mobile V2)
+  if (message.action === 'startSpaCrawl') {
+    (async () => {
+      try {
+        const result = await runSpaCrawlAndExport({
+          startUrl: message.startUrl,
+          startTabId: message.startTabId,
+          mode: message.mode || 'both',
+          maxScreens: message.maxScreens || 25,
+          options: message.options || {}
+        });
+        sendResponse(result);
+      } catch (err) {
+        console.error('[SnapHTML SPA Crawler Hata]', err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  // 7. Tarama İptal Et
+  if (message.action === 'cancelCrawl') {
+    const cancelled = cancelActiveCrawl();
+    sendResponse({ success: cancelled });
+    return false;
+  }
+
+  // 8. Klasik Derinlikli Tarama (Seviye 1, Seviye 2... URL tabanlı)
   if (message.action === 'startCrawl') {
     (async () => {
       try {
