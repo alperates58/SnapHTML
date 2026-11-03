@@ -9,9 +9,9 @@ Bu doküman, **SnapHTML** eklentisini **Google Chrome Web Store Developer Dashbo
 | Alan | Değer / Açıklama | Karakter Sınırı / Durum |
 | :--- | :--- | :--- |
 | **Eklenti Adı (Extension Name)** | `SnapHTML — Web Cloner & AI Mirror` | Max 45 karakter (34 karakter ✅) |
-| **Kısa Açıklama (TR)** | `Web sayfalarını stilleri, fontları ve DOM durumuyla klonlar; tek tıkla bağımsız HTML veya AI için hazır ZIP paketi yapar.` | Max 132 karakter (120 karakter ✅) |
-| **Short Description (EN)** | `Clone any web page with styles, fonts, images, and DOM state into standalone offline HTML or multi-page ZIP ready for AI.` | Max 132 karakter (122 karakter ✅) |
-| **Sürüm (Version)** | `1.0.1` | Manifest V3 |
+| **Kısa Açıklama (TR)** | `Web sayfalarını stilleri, fontları ve SPA durumuyla klonlar; masaüstü/mobil ve AI için bağımsız HTML veya ZIP üretir.` | Max 132 karakter (117 karakter ✅) |
+| **Short Description (EN)** | `Clone web pages with styles, fonts, and SPA state into standalone HTML or multi-page ZIP ready for AI and mobile.` | Max 132 karakter (113 karakter ✅) |
+| **Sürüm (Version)** | `2.1.0` | Manifest V3 |
 | **Kategori (Category)** | `Geliştirici Araçları (Developer Tools)` veya `Verimlilik (Productivity)` | Birincil: Developer Tools |
 | **Fiyatlandırma** | `Ücretsiz (Free)` | — |
 | **Dil Desteği** | Türkçe & İngilizce | — |
@@ -23,9 +23,17 @@ Bu doküman, **SnapHTML** eklentisini **Google Chrome Web Store Developer Dashbo
 ### 🇹🇷 Türkçe Açıklama (Chrome Web Store İçin Kopyalayın):
 
 ```text
-SnapHTML — Açık olan herhangi bir web sayfasını veya web uygulamasını (React, Next.js, Vue, Tailwind, localhost vb.) tek tıkla; tüm CSS stilleri, fontları, resimleri, Canvas grafiklerini, form verilerini ve anlık DOM durumunu içine gömerek %100 bağımsız tek parça bir HTML dosyası veya birbirine bağlı çok sayfalı bir ZIP web sitesi paketi olarak donduran yeni nesil bir geliştirici aracıdır.
+SnapHTML — Açık olan herhangi bir web sayfasını veya karmaşık tek sayfa uygulamasını (React, Next.js, Vue, Angular, Tailwind, SaaS panelleri, localhost) tek tıkla; tüm CSS stilleri, fontları, resimleri, Canvas grafiklerini, form verilerini ve anlık DOM durumunu içine gömerek %100 bağımsız tek parça bir HTML dosyası veya birbirine bağlı çok sayfalı bir ZIP web sitesi paketi olarak donduran yeni nesil bir geliştirici ve yapay zeka aracıdır.
 
 Artık web sitelerini Claude, Cursor, ChatGPT, Antigravity ve Gemini gibi yapay zeka modellerine eksiksiz aktarmak çocuk oyuncağı!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 V2.1 İLE GELEN YENİLİKLER:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 Çift Viewport (Dual-Viewport): Sayfaları hem Masaüstü (1920×1080) hem de Mobil (iPhone 390×844) cihaz emülasyonu ile piksel kusursuzluğunda yakalayın.
+🧠 Akıllı SPA Keşif Motoru: React/Vue/Angular uygulamalarındaki menü, sekme ve panelleri URL değişmese bile DOM parmak izi analiziyle otomatik keşfeder.
+🛡️ Safe Modal Detection & Recovery: Sayfada açılan modal ve diyalog pencerelerini otomatik tespit eder, kaydeder ve güvenle kapatıp ana akışa devam eder.
+🔍 İnteraktif Önizleyici (viewer.html): ZIP paketinin içine gömülü interaktif görsel gezgin ile tüm ekranları cihaz çerçevesinde inceleyin.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 3 FARKLI KLONLAMA DERİNLİĞİ:
@@ -36,9 +44,9 @@ Artık web sitelerini Claude, Cursor, ChatGPT, Antigravity ve Gemini gibi yapay 
 - Çift tıkladığınızda internet bağlantısı veya yerel sunucu olmadan doğrudan tarayıcınızda açılır.
 
 🔘 Seviye 1: Sekmeler & Menü Bağlantıları (.ZIP Web Sitesi)
-- Sayfadaki üst menü sekmelerini (Örn: Genel Bakış, Raporlar, Profil, Ayarlar) otomatik keşfeder.
-- Her sekmeyi arka planda açıp stilleriyle klonlar.
-- Yerel Link Dönüştürme: Sayfalardaki href="/ayarlar" linklerini otomatik olarak yerel href="./ayarlar.html" dosyalarına bağlar. ZIP'i açtığınızda sekmelere tıklayarak sayfalar arasında gezinebilirsiniz!
+- Sayfadaki üst menü sekmelerini ve SPA rotalarını otomatik keşfeder.
+- Her sekmeyi arka planda masaüstü/mobil modda açıp stilleriyle klonlar.
+- Yerel Link Dönüştürme: Sayfalardaki linkleri otomatik olarak yerel dosyalara bağlar. ZIP'i açtığınızda sekmelere tıklayarak sayfalar arasında gezinebilirsiniz!
 
 🔘 Seviye 2: Kapsamlı Derinlik (Recursive Crawl)
 - Seviye 1'deki sayfaların alt detay bağlantılarını da zincirleme tarayarak çok sayfalı dokümantasyonları, panelleri veya portalları yerel bir çevrimdışı site paketine dönüştürür.
@@ -47,7 +55,7 @@ Artık web sitelerini Claude, Cursor, ChatGPT, Antigravity ve Gemini gibi yapay 
 🤖 AI PROJE RÖNTGENİ (project_ai.md):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ZIP paketinin içine otomatik olarak eklenen 'project_ai.md' dosyası ile:
-- Tüm sayfaların hiyerarşik site haritası
+- Tüm sayfaların hiyerarşik site haritası ve ekran akışları
 - Sayfa başına DOM elemanları, butonlar ve form girdi sayıları
 - Kullanılan CSS Framework tespiti (Tailwind, React, Next.js, Bootstrap)
 - Sayfanın hesaplanmış renk paleti hazır bir AI promptu olarak sunulur.
@@ -127,6 +135,8 @@ Google Chrome Web Store onay süreci sırasında sorulan sorulara şu yanıtlar�
 | **`unlimitedStorage`** | *Used to store large snapshot HTML files containing Base64 encoded assets in IndexedDB so the user can inspect them in the Preview tab without browser quota exceptions.* |
 | **`downloads`** | *Used to trigger the direct download of the generated standalone .html file or the bundled multi-page .zip archive to the user's local disk.* |
 | **`clipboardWrite`** | *Used to allow the user to click the "Copy AI Prompt" button and instantly copy the structured Markdown architecture summary to their clipboard.* |
+| **`debugger`** | *Used to attach Chrome DevTools Protocol (CDP) for accurate viewport emulation (e.g. mobile dimensions, touch event simulation, device metrics override) and full-fidelity mobile/desktop screenshots.* |
+| **`tabs`** | *Used to query, activate, and manage tabs during multi-page SPA crawling and dual-viewport state captures.* |
 | **`<all_urls>` (Host Permissions)** | *Necessary because the extension is designed to clone user-specified web pages across any domain (including developer localhost servers, staging environments, and public websites). It is also required to fetch cross-origin stylesheets (CSS) and font files via the background service worker to inline them and bypass browser CORS restrictions.* |
 
 ### C. Uzak Kod Kullanımı (Remote Code Policy):
